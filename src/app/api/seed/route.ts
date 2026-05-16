@@ -5,6 +5,8 @@ import Product from "@/models/Product";
 import Order from "@/models/Order";
 import bcrypt from "bcryptjs";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     await connectToDatabase();
