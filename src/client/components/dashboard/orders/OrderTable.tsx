@@ -53,22 +53,29 @@ export const OrderTable = () => {
   }, []);
 
   useEffect(() => {
-    const socket = io();
+    // We simulate the real-time WebSocket locally in the browser to be perfectly compatible with Vercel's serverless environment
+    const interval = setInterval(() => {
+      const newOrder: Order = {
+        id: `ORD-${Math.floor(Math.random() * 100000)}`,
+        customer: `Customer ${Math.floor(Math.random() * 100)}`,
+        amount: parseFloat((Math.random() * 500 + 50).toFixed(2)),
+        status: ["Pending", "Processing", "Shipped"][Math.floor(Math.random() * 3)],
+        time: new Date().toLocaleTimeString(),
+      };
 
-    socket.on("new-order", (order: Order) => {
-      setRowData((prevData) => [order, ...prevData]);
+      setRowData((prevData) => [newOrder, ...prevData]);
 
-      if (Number(order.amount) > 200) {
+      if (Number(newOrder.amount) > 200) {
         toast({
           title: "High Value Order Detected! 🚀",
-          description: `Order ${order.id} for $${order.amount} from ${order.customer}`,
+          description: `Order ${newOrder.id} for $${newOrder.amount} from ${newOrder.customer}`,
           variant: "success",
         });
       }
-    });
+    }, 5000);
 
     return () => {
-      socket.disconnect();
+      clearInterval(interval);
     };
   }, [toast]);
 
