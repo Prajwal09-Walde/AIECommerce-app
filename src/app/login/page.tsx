@@ -90,7 +90,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="block w-full pl-10 bg-slate-950/50 border border-slate-800 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300"
-                      placeholder="admin@example.com"
+                      placeholder="Enter your email"
                     />
                   </div>
                 </div>
@@ -115,7 +115,7 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="block w-full pl-10 bg-slate-950/50 border border-slate-800 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300"
-                      placeholder="••••••••"
+                      placeholder="Enter your password"
                     />
                   </div>
                 </div>

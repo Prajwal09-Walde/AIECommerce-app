@@ -129,7 +129,7 @@ export default function RegisterPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="block w-full pl-10 bg-slate-950/50 border border-slate-800 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
-                      placeholder="••••••••"
+                      placeholder="Password"
                     />
                   </div>
                 </div>
