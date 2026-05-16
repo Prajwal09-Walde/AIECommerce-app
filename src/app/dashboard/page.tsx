@@ -115,8 +115,10 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Overview</CardTitle>
           </CardHeader>
-          <CardContent className="pl-2">
-            <OverviewChart />
+          <CardContent className="pl-2 overflow-x-auto">
+            <div className="min-w-[500px] w-full">
+              <OverviewChart />
+            </div>
           </CardContent>
         </Card>
         <Card className="col-span-3">

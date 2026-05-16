@@ -22,7 +22,7 @@ export const ChatAssistant = () => {
       )}
 
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-[350px] h-[500px] flex flex-col shadow-2xl z-50 border-primary/20">
+        <Card className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-[calc(100vw-2rem)] sm:w-[350px] h-[75vh] sm:h-[500px] flex flex-col shadow-2xl z-50 border-primary/20">
           <CardHeader className="p-4 bg-primary text-primary-foreground flex flex-row items-center justify-between rounded-t-lg">
             <CardTitle className="text-sm flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
