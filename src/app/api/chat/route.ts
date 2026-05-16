@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     messages: [systemMessage, ...messages],
   });
 
-  const stream = OpenAIStream(response);
+  // Type-casting to any resolves the AzureChatCompletions type mismatch between openai and ai SDKs
+  const stream = OpenAIStream(response as any);
   return new StreamingTextResponse(stream);
 }
