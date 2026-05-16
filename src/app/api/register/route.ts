@@ -33,6 +33,6 @@ export async function POST(
     return NextResponse.json({ id: user._id, email: user.email, name: user.name });
   } catch (error: any) {
     console.log(error, "REGISTRATION_ERROR");
-    return new NextResponse("Internal Error", { status: 500 });
+    return new NextResponse(error.message || "Internal Error", { status: 500 });
   }
 }
