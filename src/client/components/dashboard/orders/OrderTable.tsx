@@ -13,21 +13,29 @@ interface Order {
   customer: string;
   amount: number;
   status: string;
-  time: string;
+  region: string;
+  localTime: string;
 }
+
+const GLOBAL_MARKETS = [
+  { name: "APAC (Tokyo)", timezone: "Asia/Tokyo" },
+  { name: "EMEA (London)", timezone: "Europe/London" },
+  { name: "AMER (New York)", timezone: "America/New_York" },
+];
 
 export const OrderTable = () => {
   const { toast } = useToast();
   const [rowData, setRowData] = useState<Order[]>([
-    { id: "ORD-001", customer: "Alice Smith", amount: 120.50, status: "Processing", time: "10:00 AM" },
-    { id: "ORD-002", customer: "Bob Jones", amount: 45.00, status: "Pending", time: "10:05 AM" },
-    { id: "ORD-003", customer: "Charlie Brown", amount: 350.00, status: "Shipped", time: "10:15 AM" },
+    { id: "ORD-001", customer: "Alice Smith", amount: 120.50, status: "Processing", region: "AMER (New York)", localTime: new Intl.DateTimeFormat('en-US', { timeStyle: 'medium', timeZone: 'America/New_York' }).format(new Date()) },
+    { id: "ORD-002", customer: "Bob Jones", amount: 45.00, status: "Pending", region: "EMEA (London)", localTime: new Intl.DateTimeFormat('en-US', { timeStyle: 'medium', timeZone: 'Europe/London' }).format(new Date()) },
+    { id: "ORD-003", customer: "Charlie Brown", amount: 350.00, status: "Shipped", region: "APAC (Tokyo)", localTime: new Intl.DateTimeFormat('en-US', { timeStyle: 'medium', timeZone: 'Asia/Tokyo' }).format(new Date()) },
   ]);
 
   const [columnDefs] = useState<ColDef<Order>[]>([
     { field: "id", headerName: "Order ID", sortable: true, filter: true },
     { field: "customer", headerName: "Customer", sortable: true, filter: true },
     { field: "amount", headerName: "Total Amount", sortable: true, filter: true, valueFormatter: (params: any) => `$${params.value}` },
+    { field: "region", headerName: "Market Region", sortable: true, filter: true },
     { field: "status", headerName: "Status", sortable: true, filter: true, 
       cellRenderer: (params: any) => {
         let color = "bg-gray-200 text-gray-800";
@@ -41,7 +49,7 @@ export const OrderTable = () => {
         );
       }
     },
-    { field: "time", headerName: "Time", sortable: true, filter: true },
+    { field: "localTime", headerName: "Local Time", sortable: true, filter: true },
   ]);
 
   const defaultColDef = useMemo(() => {
@@ -53,14 +61,16 @@ export const OrderTable = () => {
   }, []);
 
   useEffect(() => {
-    // We simulate the real-time WebSocket locally in the browser to be perfectly compatible with Vercel's serverless environment
+    // Simulate real-time global transactions arriving from different timezones
     const interval = setInterval(() => {
+      const market = GLOBAL_MARKETS[Math.floor(Math.random() * GLOBAL_MARKETS.length)];
       const newOrder: Order = {
         id: `ORD-${Math.floor(Math.random() * 100000)}`,
         customer: `Customer ${Math.floor(Math.random() * 100)}`,
         amount: parseFloat((Math.random() * 500 + 50).toFixed(2)),
         status: ["Pending", "Processing", "Shipped"][Math.floor(Math.random() * 3)],
-        time: new Date().toLocaleTimeString(),
+        region: market.name,
+        localTime: new Intl.DateTimeFormat('en-US', { timeStyle: 'medium', timeZone: market.timezone }).format(new Date()),
       };
 
       setRowData((prevData) => [newOrder, ...prevData]);
