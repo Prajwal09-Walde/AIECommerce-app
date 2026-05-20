@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const routes = [
@@ -35,6 +35,12 @@ const routes = [
     icon: LineChart,
     href: "/dashboard/forecasting",
     color: "text-emerald-500",
+  },
+  {
+    label: "AI RAG Analyst",
+    icon: Sparkles,
+    href: "/dashboard/ai-analysis",
+    color: "text-amber-500",
   },
   {
     label: "Alerts",

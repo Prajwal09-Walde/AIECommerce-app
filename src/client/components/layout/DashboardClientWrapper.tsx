@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 interface DashboardClientWrapperProps {
   header: React.ReactNode;
   children: React.ReactNode;
-  chat: React.ReactNode;
   command: React.ReactNode;
   toaster: React.ReactNode;
 }
@@ -15,7 +14,6 @@ interface DashboardClientWrapperProps {
 export const DashboardClientWrapper = ({
   header,
   children,
-  chat,
   command,
   toaster
 }: DashboardClientWrapperProps) => {
@@ -63,7 +61,6 @@ export const DashboardClientWrapper = ({
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full">
           {children}
         </div>
-        {chat}
         {command}
         {toaster}
       </main>
