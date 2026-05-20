@@ -7,7 +7,10 @@ const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
+console.log("Starting Next.js app preparation...");
+
 app.prepare().then(() => {
+  console.log("Next.js prepared successfully");
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
@@ -52,4 +55,7 @@ app.prepare().then(() => {
     if (err) throw err;
     console.log(`> Ready on http://localhost:${PORT}`);
   });
+}).catch((err) => {
+  console.error("Failed to prepare Next.js:", err);
+  process.exit(1);
 });
