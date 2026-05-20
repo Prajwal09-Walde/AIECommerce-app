@@ -337,7 +337,7 @@ export default function AIAnalysisPage() {
                   {isPending && (
                     <div className="flex items-center gap-2 text-indigo-400 mt-2 animate-pulse">
                       <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
-                      Awaiting response stream from Gemini-1.5-Flash Core...
+                      Awaiting response stream from Gemini-2.5-Flash Core...
                     </div>
                   )}
                   <div ref={consoleEndRef} />

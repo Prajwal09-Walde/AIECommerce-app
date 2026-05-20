@@ -198,9 +198,9 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
   ]
 }`;
 
-    logs.push(`[${new Date().toLocaleTimeString()}] Prompt generated. Sending generation stream request to Gemini-1.5-Flash...`);
+    logs.push(`[${new Date().toLocaleTimeString()}] Prompt generated. Sending generation stream request to Gemini-2.5-Flash...`);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(systemPrompt);
     const responseText = result.response.text();
 

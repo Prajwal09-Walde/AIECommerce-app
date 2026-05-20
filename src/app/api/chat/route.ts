@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   ]);
 
   const geminiStream = await genAI
-    .getGenerativeModel({ model: 'gemini-1.5-flash' })
+    .getGenerativeModel({ model: 'gemini-2.5-flash' })
     .generateContentStream({
       contents: promptMessages,
     });
