@@ -18,6 +18,9 @@ app.prepare().then(() => {
       origin: "*",
       methods: ["GET", "POST"],
     },
+    // Disable zlib-based compression to prevent Node.js memory allocation crashes on socket streams
+    perMessageDeflate: false,
+    httpCompression: false,
   });
 
   // Mock real-time orders interval

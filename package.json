@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node local-server.js",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node --max-old-space-size=2048 local-server.js",
+    "build": "node --max-old-space-size=2048 node_modules/next/dist/bin/next build",
+    "start": "node --max-old-space-size=2048 node_modules/next/dist/bin/next start",
     "lint": "next lint",
     "deploy": "git add . && git commit -m \"Auto-deploy update\" && git push"
   },
