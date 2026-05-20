@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const routes = [
@@ -65,8 +65,9 @@ export const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-4 top-6 bg-amber-500 text-black rounded-full p-1 shadow-md hover:bg-amber-400 z-[90] transition-colors"
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          <Menu className="w-4 h-4" />
         </button>
 
         <Link href="/dashboard" className={cn("flex items-center mb-14 transition-all duration-300", isCollapsed ? "justify-center" : "pl-3")}>
