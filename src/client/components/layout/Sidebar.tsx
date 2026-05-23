@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles, Menu } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles, Menu, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const routes = [
@@ -11,6 +11,12 @@ const routes = [
     icon: LayoutDashboard,
     href: "/dashboard",
     color: "text-sky-500",
+  },
+  {
+    label: "Dataset",
+    icon: Database,
+    href: "/dashboard/analytics",
+    color: "text-indigo-500",
   },
   {
     label: "Orders (Real-time)",

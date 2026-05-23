@@ -1,35 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search } from "lucide-react";
+import { Search, Loader2, Users2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { motion } from "framer-motion";
-
-const segmentData = [
-  { name: "High Value", value: 400, color: "#4f46e5" }, // Indigo
-  { name: "At Risk", value: 300, color: "#f59e0b" },    // Gold (Amber)
-  { name: "New", value: 300, color: "#312e81" },        // Dark Indigo
-  { name: "Regular", value: 200, color: "#eab308" },    // Yellow Gold
-];
-
-const sourceData = [
-  { name: "Organic Search", value: 500, color: "#4f46e5" }, // Indigo
-  { name: "Social Media", value: 250, color: "#f59e0b" },   // Gold
-  { name: "Direct", value: 150, color: "#fbbf24" },         // Light Gold
-  { name: "Referral", value: 100, color: "#3730a3" },       // Deep Indigo
-];
+import { getCustomerIntelligence } from "@/actions/customer-actions";
 
 export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  return (
-    <div className="space-y-8">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const res = await getCustomerIntelligence();
+        setData(res);
+      } catch (err) {
+        console.error("Failed to fetch customer intelligence:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  // Filter top customer profiles based on search term
+  const filteredCustomers = useMemo(() => {
+    if (!data || !data.topCustomers) return [];
+    if (!searchTerm.trim()) return data.topCustomers;
+    return data.topCustomers.filter((c: any) =>
+      c.customer.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [data, searchTerm]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+        <p className="text-muted-foreground text-sm font-medium">Extracting behavioral profiles...</p>
+      </div>
+    );
+  }
+
+  // Premium empty state prior to ingestion
+  if (!data || !data.hasData) {
+    return (
+      <div className="space-y-8">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Customer Intelligence</h2>
           <p className="text-muted-foreground">
             Analyze customer segments, retention rates, and lifetime value.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center justify-center py-32 space-y-4 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/20 backdrop-blur-sm text-center">
+          <div className="p-4 bg-indigo-500/10 rounded-full text-indigo-500">
+            <Users2 className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-bold text-lg">No buyer intelligence found</h3>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              Please upload and distribute the transaction dataset inside the **Dataset** tab to calculate segmentation profiles!
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+      >
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Customer Intelligence</h2>
+          <p className="text-muted-foreground">
+            Analyze customer segments, purchase behavior, and lifetime value.
           </p>
         </div>
         <div className="relative">
@@ -44,34 +95,34 @@ export default function CustomersPage() {
         </div>
       </motion.div>
 
+      {/* Pie Charts */}
       <div className="grid gap-4 md:grid-cols-2">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}>
-          <Card className="h-full border-t-4 border-t-indigo-500 overflow-hidden shadow-lg">
+          <Card className="h-full border-t-4 border-t-indigo-500 overflow-hidden shadow-lg bg-white/50 dark:bg-black/50 backdrop-blur-md">
             <CardHeader>
               <CardTitle>Customer Segmentation</CardTitle>
-              <CardDescription>Distribution of users by purchasing behavior</CardDescription>
+              <CardDescription>Distribution of users by purchasing behavior (LTV)</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px] flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={segmentData}
+                    data={data.segmentData}
                     cx="50%"
-                    cy="50%"
-                    innerRadius={80}
-                    outerRadius={110}
-                    paddingAngle={5}
+                    cy="45%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={4}
                     dataKey="value"
                     animationBegin={200}
-                    animationDuration={1500}
+                    animationDuration={1200}
                   >
-                    {segmentData.map((entry, index) => (
+                    {data.segmentData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" className="hover:opacity-80 transition-opacity cursor-pointer outline-none" />
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} 
-                    itemStyle={{ color: '#1e293b', fontWeight: 'bold' }} 
+                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: '12px', border: 'none', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }} 
                   />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" />
                 </PieChart>
@@ -81,31 +132,31 @@ export default function CustomersPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}>
-          <Card className="h-full border-t-4 border-t-emerald-500 overflow-hidden shadow-lg">
+          <Card className="h-full border-t-4 border-t-amber-500 overflow-hidden shadow-lg bg-white/50 dark:bg-black/50 backdrop-blur-md">
             <CardHeader>
-              <CardTitle>Acquisition Sources</CardTitle>
-              <CardDescription>Where your highest LTV customers originate</CardDescription>
+              <CardTitle>Payment Method Breakdown</CardTitle>
+              <CardDescription>Popular checkout channels from transaction logs</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px] flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={sourceData}
+                    data={data.paymentData}
                     cx="50%"
-                    cy="50%"
-                    innerRadius={80}
-                    outerRadius={110}
-                    paddingAngle={5}
+                    cy="45%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={4}
                     dataKey="value"
                     animationBegin={400}
-                    animationDuration={1500}
+                    animationDuration={1200}
                   >
-                    {sourceData.map((entry, index) => (
+                    {data.paymentData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" className="hover:opacity-80 transition-opacity cursor-pointer outline-none" />
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} 
+                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: '12px', border: 'none', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }} 
                   />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" />
                 </PieChart>
@@ -114,6 +165,59 @@ export default function CustomersPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Customer Index Table */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="shadow-lg bg-white/50 dark:bg-black/50 backdrop-blur-md border border-slate-200 dark:border-slate-800">
+          <CardHeader>
+            <CardTitle>Customer Spend Directory</CardTitle>
+            <CardDescription>Listing up to 100 high-value customer accounts and transaction metrics</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900/60 font-semibold text-slate-700 dark:text-slate-200">
+                  <tr>
+                    <th className="px-6 py-3">Customer ID / Email</th>
+                    <th className="px-6 py-3">Orders Count</th>
+                    <th className="px-6 py-3">Lifetime Value (LTV)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {filteredCustomers.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">
+                        No customers match your query.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCustomers.map((customer: any, idx: number) => (
+                      <tr 
+                        key={customer.customer || idx} 
+                        className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
+                      >
+                        <td className="px-6 py-4 font-mono font-medium text-xs text-indigo-600 dark:text-indigo-400">
+                          {customer.customer}
+                        </td>
+                        <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
+                          {customer.orderCount} purchases
+                        </td>
+                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                          ${customer.ltv.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

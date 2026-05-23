@@ -1,80 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
-const generateInitialData = () => {
-  const data = [];
-  const now = new Date();
-  for (let i = 20; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 2000);
-    data.push({
-      time: time.toLocaleTimeString('en-US', { hour12: false }),
-      APAC: Math.floor(Math.random() * 500) + 100,
-      EMEA: Math.floor(Math.random() * 800) + 200,
-      AMER: Math.floor(Math.random() * 1000) + 300,
-    });
-  }
-  return data;
-};
+interface OverviewChartProps {
+  data: any[];
+}
 
-export const OverviewChart = () => {
-  const [data, setData] = useState<any[]>([]);
+const PREMIUM_PALETTE = [
+  { stroke: "#6366f1", fill: "#6366f1", gradientId: "colorIndigo" }, // Indigo
+  { stroke: "#f59e0b", fill: "#f59e0b", gradientId: "colorAmber" },  // Amber
+  { stroke: "#10b981", fill: "#10b981", gradientId: "colorEmerald" },// Emerald
+  { stroke: "#06b6d4", fill: "#06b6d4", gradientId: "colorCyan" },   // Cyan
+  { stroke: "#ec4899", fill: "#ec4899", gradientId: "colorPink" },   // Pink
+];
 
-  useEffect(() => {
-    setData(generateInitialData());
-
-    const interval = setInterval(() => {
-      setData((currentData) => {
-        const newData = [...currentData.slice(1)];
-        const now = new Date();
-        newData.push({
-          time: now.toLocaleTimeString('en-US', { hour12: false }),
-          APAC: Math.floor(Math.random() * 500) + 100,
-          EMEA: Math.floor(Math.random() * 800) + 200,
-          AMER: Math.floor(Math.random() * 1000) + 300,
-        });
-        return newData;
+export const OverviewChart: React.FC<OverviewChartProps> = ({ data }) => {
+  // Dynamically discover all unique categories (keys) present in the trend data
+  const categoryKeys = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    const keys = new Set<string>();
+    data.forEach((d) => {
+      Object.keys(d).forEach((k) => {
+        if (k !== "time" && k !== "id") {
+          keys.add(k);
+        }
       });
-    }, 2000);
+    });
+    return Array.from(keys).slice(0, 4); // Limit to top 4 categories for visual clarity
+  }, [data]);
 
-    return () => clearInterval(interval);
-  }, []);
-
-  if (data.length === 0) return null;
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex h-[350px] items-center justify-center text-muted-foreground text-sm font-medium">
+        Waiting for stream timeline data...
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
         <defs>
-          <linearGradient id="colorAMER" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-          </linearGradient>
-          <linearGradient id="colorEMEA" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-          </linearGradient>
+          {categoryKeys.map((key, index) => {
+            const colors = PREMIUM_PALETTE[index % PREMIUM_PALETTE.length];
+            return (
+              <linearGradient id={colors.gradientId} key={colors.gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={colors.fill} stopOpacity={0.4} />
+                <stop offset="95%" stopColor={colors.fill} stopOpacity={0} />
+              </linearGradient>
+            );
+          })}
         </defs>
         <XAxis 
           dataKey="time" 
           stroke="#888888" 
-          fontSize={12} 
+          fontSize={11} 
           tickLine={false} 
           axisLine={false} 
           minTickGap={20}
         />
         <YAxis 
           stroke="#888888" 
-          fontSize={12} 
+          fontSize={11} 
           tickLine={false} 
           axisLine={false} 
           tickFormatter={(value) => `$${value}`} 
         />
-        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
-        <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: '8px', border: 'none', color: '#fff' }} />
-        <Area type="monotone" dataKey="AMER" stroke="#6366f1" fillOpacity={1} fill="url(#colorAMER)" name="Americas" />
-        <Area type="monotone" dataKey="EMEA" stroke="#f59e0b" fillOpacity={1} fill="url(#colorEMEA)" name="Europe & Middle East" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: 'rgba(0,0,0,0.85)', 
+            borderRadius: '12px', 
+            border: 'none', 
+            color: '#fff',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' 
+          }} 
+          itemStyle={{ fontSize: '12px' }}
+        />
+        {categoryKeys.map((key, index) => {
+          const colors = PREMIUM_PALETTE[index % PREMIUM_PALETTE.length];
+          return (
+            <Area 
+              key={key}
+              type="monotone" 
+              dataKey={key} 
+              stroke={colors.stroke} 
+              strokeWidth={2.5}
+              fillOpacity={1} 
+              fill={`url(#${colors.gradientId})`} 
+              name={key}
+              stackId="1" // Stacked area chart for visual depth
+            />
+          );
+        })}
       </AreaChart>
     </ResponsiveContainer>
   );
