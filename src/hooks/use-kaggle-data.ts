@@ -1,55 +1,101 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { parseCSV } from "@/client/utils/data-processor";
+import { useState, useEffect, useRef } from "react";
 
 export function useKaggleData() {
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamSpeed, setStreamSpeed] = useState(0.2); // seconds per transaction
+  const [loading, setLoading] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Sync state with localStorage on mount
+  // Stop stream on unmount
   useEffect(() => {
-    const cached = localStorage.getItem("kaggle_transactions");
-    if (cached) {
-      try {
-        setTransactions(JSON.parse(cached));
-      } catch (e) {
-        console.error("Failed to parse cached transactions:", e);
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
-    }
-    setLoading(false);
+    };
   }, []);
 
-  // Set parsed transactions in state and localStorage
-  const uploadCSV = (rawText: string) => {
+  const clearData = async () => {
     setLoading(true);
-    const parsed = parseCSV(rawText);
-    if (parsed.length > 0) {
-      try {
-        localStorage.setItem("kaggle_transactions", JSON.stringify(parsed));
-        setTransactions(parsed);
-      } catch (e) {
-        console.error("Failed to cache transactions in localStorage:", e);
-        // Fallback: set in memory only if localStorage quota is exceeded
-        setTransactions(parsed);
-      }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
-    setLoading(false);
-    return parsed.length;
-  };
-
-  // Clear data state
-  const clearData = () => {
+    
+    try {
+      await fetch("http://localhost:8000/api/reset/", {
+        method: "POST"
+      });
+    } catch (e) {
+      console.error("Failed to reset Django database:", e);
+    }
+    
     localStorage.removeItem("kaggle_transactions");
     setTransactions([]);
+    setIsStreaming(false);
+    setLoading(false);
+  };
+
+  const startStreaming = async (speedVal: number = 0.2) => {
+    setLoading(true);
+    try {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+
+      setTransactions([]);
+      setIsStreaming(true);
+
+      const streamUrl = `http://localhost:8000/api/stream/?speed=${speedVal}`;
+      const es = new EventSource(streamUrl);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const t = JSON.parse(event.data);
+          setTransactions((prev) => [...prev, t]);
+        } catch (e) {
+          console.error("Error parsing stream transaction event:", e);
+        }
+      };
+
+      es.addEventListener("start", () => {
+        setTransactions([]);
+        setIsStreaming(true);
+      });
+
+      es.addEventListener("end", () => {
+        setIsStreaming(false);
+        es.close();
+      });
+
+      es.onerror = (err) => {
+        console.error("EventSource stream connection error:", err);
+        setIsStreaming(false);
+        es.close();
+      };
+
+    } catch (e) {
+      console.error("Stream error:", e);
+      setIsStreaming(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return {
     transactions,
     hasData: transactions.length > 0,
+    isStreaming,
+    streamSpeed,
+    setStreamSpeed,
     loading,
-    uploadCSV,
+    startStreaming,
     clearData,
   };
 }
+
 export default useKaggleData;

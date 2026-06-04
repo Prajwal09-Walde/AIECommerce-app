@@ -8,7 +8,6 @@ import {
   Activity, 
   Database, 
   Loader2, 
-  UploadCloud, 
   Trash2, 
   CheckCircle, 
   TrendingUp, 
@@ -31,7 +30,8 @@ import {
   CheckSquare,
   Square,
   AlertCircle,
-  Info
+  Info,
+  Clock
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,8 +42,6 @@ import {
   calculateProducts, 
   calculateForecasting 
 } from "@/client/utils/data-processor";
-import { runAutomatedRAGAnalysis } from "@/actions/rag-actions";
-import { useToast } from "@/hooks/use-toast";
 
 // Recharts components
 import { 
@@ -68,9 +66,6 @@ import { ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
-const MotionCard = motion(Card);
-
-// Preset contexts for RAG analysis
 const PRESETS = [
   {
     title: "Competitor Strategy & Clearance",
@@ -101,16 +96,62 @@ const PRESETS = [
   }
 ];
 
+// Live Timezone Clocks Component
+const TimezoneClocks = () => {
+  const [times, setTimes] = useState({ tokyo: "", london: "", newYork: "", ist: "" });
+
+  useEffect(() => {
+    const options = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
+    const updateTimes = () => {
+      setTimes({
+        tokyo: new Intl.DateTimeFormat("en-US", { ...options, timeZone: "Asia/Tokyo" }).format(new Date()),
+        london: new Intl.DateTimeFormat("en-US", { ...options, timeZone: "Europe/London" }).format(new Date()),
+        newYork: new Intl.DateTimeFormat("en-US", { ...options, timeZone: "America/New_York" }).format(new Date()),
+        ist: new Intl.DateTimeFormat("en-US", { ...options, timeZone: "Asia/Kolkata" }).format(new Date())
+      });
+    };
+    updateTimes();
+    const interval = setInterval(updateTimes, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="grid gap-3 grid-cols-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-center font-mono shadow-inner">
+      <div className="space-y-1">
+        <p className="text-[10px] text-sky-400 font-bold tracking-wider">APAC (Tokyo)</p>
+        <p className="text-sm font-semibold text-white">{times.tokyo || "00:00:00"}</p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-[10px] text-amber-500 font-bold tracking-wider">EMEA (London)</p>
+        <p className="text-sm font-semibold text-white">{times.london || "00:00:00"}</p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-[10px] text-indigo-400 font-bold tracking-wider">AMER (New York)</p>
+        <p className="text-sm font-semibold text-white">{times.newYork || "00:00:00"}</p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-[10px] text-emerald-400 font-bold tracking-wider">India (IST)</p>
+        <p className="text-sm font-semibold text-white">{times.ist || "00:00:00"}</p>
+      </div>
+    </div>
+  );
+};
+
 export default function DashboardPage() {
-  const { toast } = useToast();
-  const { transactions, hasData, loading, uploadCSV, clearData } = useKaggleData();
+  const { 
+    transactions, 
+    hasData, 
+    isStreaming, 
+    streamSpeed, 
+    setStreamSpeed, 
+    loading, 
+    startStreaming, 
+    clearData 
+  } = useKaggleData();
+  
   const [activeTab, setActiveTab] = useState("overview");
 
-  // File parsing states
-  const [isParsing, setIsParsing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Search/Filters states
+  // Filter states
   const [orderSearch, setOrderSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [productPage, setProductPage] = useState(1);
@@ -153,38 +194,67 @@ export default function DashboardPage() {
 
   // ag-Grid Column definitions for Orders Tab
   const orderColumnDefs = useMemo<ColDef[]>(() => [
-    { field: "id", headerName: "Order ID", sortable: true, filter: true, width: 150 },
-    { field: "customer", headerName: "Customer ID", sortable: true, filter: true, flex: 1.5 },
+    { field: "id", headerName: "Order ID", sortable: true, filter: true, width: 140 },
+    { field: "customer", headerName: "Customer ID", sortable: true, filter: true, width: 140 },
     { 
       field: "amount", 
       headerName: "Amount", 
       sortable: true, 
       filter: true, 
-      width: 130,
+      width: 110,
       valueFormatter: (p) => `$${p.value.toFixed(2)}`
     },
-    { field: "category", headerName: "Category", sortable: true, filter: true, width: 140 },
-    { field: "paymentMethod", headerName: "Payment Method", sortable: true, filter: true, width: 160 },
+    { field: "category", headerName: "Category", sortable: true, filter: true, width: 120 },
+    { field: "paymentMethod", headerName: "Payment Method", sortable: true, filter: true, width: 150 },
     { 
       field: "region", 
       headerName: "Market Region", 
       sortable: true, 
       filter: true, 
-      width: 160,
+      width: 150,
       valueGetter: (params) => {
         const pm = params.data.paymentMethod || "";
         if (pm.toLowerCase().includes("credit") || pm.toLowerCase().includes("card")) return "AMER (New York)";
         if (pm.toLowerCase().includes("paypal") || pm.toLowerCase().includes("bank")) return "EMEA (London)";
+        if (pm.toLowerCase().includes("crypto")) return "India (IST)";
         return "APAC (Tokyo)";
       }
     },
     { 
-      field: "purchaseDate", 
-      headerName: "Purchase Date", 
+      field: "tokyoTime", 
+      headerName: "APAC (Tokyo)", 
       sortable: true, 
       filter: true, 
-      flex: 1.2,
-      valueFormatter: (p) => new Date(p.value).toLocaleString()
+      width: 180,
+      valueGetter: (params) => params.data.purchaseDate,
+      valueFormatter: (p) => new Date(p.value).toLocaleString("en-US", { timeZone: "Asia/Tokyo" })
+    },
+    { 
+      field: "londonTime", 
+      headerName: "EMEA (London)", 
+      sortable: true, 
+      filter: true, 
+      width: 180,
+      valueGetter: (params) => params.data.purchaseDate,
+      valueFormatter: (p) => new Date(p.value).toLocaleString("en-US", { timeZone: "Europe/London" })
+    },
+    { 
+      field: "nyTime", 
+      headerName: "AMER (New York)", 
+      sortable: true, 
+      filter: true, 
+      width: 180,
+      valueGetter: (params) => params.data.purchaseDate,
+      valueFormatter: (p) => new Date(p.value).toLocaleString("en-US", { timeZone: "America/New_York" })
+    },
+    { 
+      field: "istTime", 
+      headerName: "India (IST)", 
+      sortable: true, 
+      filter: true, 
+      width: 180,
+      valueGetter: (params) => params.data.purchaseDate,
+      valueFormatter: (p) => new Date(p.value).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     },
   ], []);
 
@@ -198,7 +268,7 @@ export default function DashboardPage() {
         t.category.toLowerCase().includes(q)
       );
     }
-    return list.map((t, idx) => ({ ...t, id: `ORD-${100000 + idx}` }));
+    return list.map((t, idx) => ({ ...t, amount: t.finalPrice, id: `ORD-${100000 + idx}` }));
   }, [transactions, orderSearch]);
 
   const filteredCustomers = useMemo(() => {
@@ -209,35 +279,11 @@ export default function DashboardPage() {
     );
   }, [customersStats, customerSearch]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
-  };
+  useEffect(() => {
+    startStreaming(streamSpeed);
+  }, []);
 
-  const processFile = (file: File) => {
-    setIsParsing(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result as string;
-        const count = uploadCSV(text);
-        
-        // Reset local views
-        setProductPage(1);
-        setProductSearch("");
-        setOrderSearch("");
-        setActiveTab("overview");
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsParsing(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // RAG Analysis Runner
+  // RAG Analysis Runner - Connects to Python Django REST API
   const handleStartAnalysis = () => {
     setRAGLogs([]);
     setRAGAnalysis(null);
@@ -245,10 +291,10 @@ export default function DashboardPage() {
     setCompletedTasks({});
     
     const stepLogs = [
-      "Initializing AI RAG retrieval pipeline...",
-      "Binding database references...",
-      "Extracting contextual product and transaction parameters...",
-      "Fusing local in-memory dataset boundaries...",
+      "Initializing Python RAG retrieval pipeline...",
+      "Connecting SQLite DB tables...",
+      "Bundling product catalog features...",
+      "Indexing local operational constraints...",
     ];
 
     let timer = 0;
@@ -263,39 +309,40 @@ export default function DashboardPage() {
     setTimeout(() => {
       startRAGTransition(async () => {
         setRAGActiveStep(2);
-        setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Dynamic indexing active. Indexing business rules...`]);
+        setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Query tokenization active. Querying document space...`]);
         
-        const result = await runAutomatedRAGAnalysis(ragFocus, ragGuidelines);
-        
-        if (result.success && result.analysis) {
-          setRAGActiveStep(3);
-          result.logs.forEach((bLog, bIdx) => {
-            setTimeout(() => {
-              setRAGLogs(prev => [...prev, bLog]);
-            }, bIdx * 250);
+        try {
+          const res = await fetch("http://localhost:8000/api/analyze/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ focus: ragFocus, guidelines: ragGuidelines }),
           });
 
-          setTimeout(() => {
-            setRAGActiveStep(4);
-            setRetrievedChunks(result.retrievedChunks || []);
-            setRAGAnalysis(result.analysis);
-            setRAGActiveStep(null);
-            
-            toast({
-              title: "RAG Analysis Complete 🚀",
-              description: "AI report generated directly from e-commerce records.",
-              variant: "success",
+          const result = await res.json();
+          
+          if (result.success && result.analysis) {
+            setRAGActiveStep(3);
+            result.logs.forEach((bLog: string, bIdx: number) => {
+              setTimeout(() => {
+                setRAGLogs(prev => [...prev, bLog]);
+              }, bIdx * 200);
             });
-          }, (result.logs.length * 250) + 300);
-        } else {
+
+            setTimeout(() => {
+              setRAGActiveStep(4);
+              setRetrievedChunks(result.retrievedChunks || []);
+              setRAGAnalysis(result.analysis);
+              setRAGActiveStep(null);
+            }, (result.logs.length * 200) + 200);
+          } else {
+            setRAGActiveStep(null);
+            setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ERROR: ${result.error}`]);
+          }
+        } catch (err: any) {
           setRAGActiveStep(null);
-          const errorLog = result.error || "Gemini API limits reached or compilation failed.";
-          setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] CRITICAL ERROR: ${errorLog}`]);
-          toast({
-            variant: "destructive",
-            title: "Analysis Failed",
-            description: errorLog,
-          });
+          setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ERROR: ${err.message}`]);
         }
       });
     }, timer);
@@ -304,64 +351,13 @@ export default function DashboardPage() {
   const handleApplyPreset = (preset: typeof PRESETS[0]) => {
     setRagFocus(preset.focus);
     setRagGuidelines(preset.text);
-    toast({
-      title: "Guidelines Loaded",
-      description: `Preset guidelines loaded for: "${preset.title}"`,
-    });
   };
 
-  if (loading || isParsing) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 space-y-4">
         <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
-        <p className="text-muted-foreground text-sm font-medium animate-pulse">Processing CSV ledger in-memory...</p>
-      </div>
-    );
-  }
-
-  // 1. Initial State: Elegant drag-and-drop CSV importer
-  if (!hasData) {
-    return (
-      <div className="space-y-8 max-w-4xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-3">
-          <h2 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-amber-500 to-rose-500 bg-clip-text text-transparent">
-            E-Commerce SPA Analytics AI
-          </h2>
-          <p className="text-muted-foreground text-base max-w-lg mx-auto">
-            Upload your e-commerce transactions CSV to instantly spin up premium charts, forecasting lines, ag-Grid ledgers, and AI Gemini analysis.
-          </p>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-              processFile(e.dataTransfer.files[0]);
-            }
-          }}
-          className="border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-3xl p-16 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group bg-white/40 dark:bg-slate-950/20 backdrop-blur-md shadow-xl hover:shadow-indigo-500/5"
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".csv"
-            className="hidden"
-          />
-          <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-500 group-hover:scale-110 transition-transform mb-4">
-            <UploadCloud className="w-12 h-12" />
-          </div>
-          <p className="font-bold text-lg text-slate-800 dark:text-slate-200">
-            Drag & drop your e-commerce-dataset.csv file here
-          </p>
-          <p className="text-sm text-slate-400 mt-2">
-            Or click to <span className="text-indigo-500 underline font-medium">browse local files</span>
-          </p>
-        </motion.div>
+        <p className="text-muted-foreground text-sm font-medium animate-pulse">Running Django Data Pipeline...</p>
       </div>
     );
   }
@@ -369,34 +365,47 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Dynamic SPA Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-md">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-md">
+        <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">SPA Dashboard Overview</h2>
-            <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-0.5 rounded-full text-xs font-bold border border-emerald-500/20">
-              <Sparkles className="w-3 h-3 animate-pulse" />
-              SPA Active
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Django Live Stream Dashboard</h2>
+            <span className={`flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold border transition ${
+              isStreaming 
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 animate-pulse" 
+                : "bg-slate-500/10 text-slate-500 border-slate-500/20"
+            }`}>
+              <Sparkles className="w-3 h-3" />
+              {isStreaming ? "Live Streaming Active" : "Stream Completed"}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Ingested {transactions.length.toLocaleString()} CSV rows directly in browser memory.
+          <p className="text-xs text-muted-foreground">
+            Processed {transactions.length.toLocaleString()} real-time transactions in SQLite.
           </p>
         </div>
-        <button
-          onClick={clearData}
-          className="flex items-center justify-center gap-2 border bg-white hover:bg-red-50 dark:bg-slate-950 dark:hover:bg-red-950/20 border-slate-200 dark:border-slate-800 hover:border-red-500 dark:hover:border-red-900 text-slate-700 dark:text-slate-300 hover:text-red-500 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
-        >
-          <Trash2 className="w-4 h-4" />
-          Reset Dataset
-        </button>
+        
+        {/* Unified Clocks & Reset Header Block */}
+        <div className="flex flex-wrap items-center gap-4">
+          <TimezoneClocks />
+          
+          <button
+            onClick={async () => {
+              await clearData();
+              startStreaming(streamSpeed);
+            }}
+            className="flex items-center justify-center gap-2 border bg-white hover:bg-red-50 dark:bg-slate-950 dark:hover:bg-red-950/20 border-slate-200 dark:border-slate-800 hover:border-red-500 dark:hover:border-red-900 text-slate-700 dark:text-slate-300 hover:text-red-500 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+            Reset backend
+          </button>
+        </div>
       </div>
 
-      {/* Modern SPA Tab Selector with ALL Sidebar options */}
+      {/* Dynamic SPA Tab Selector */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: "overview", label: "Overview", icon: DollarSign },
-          { id: "orders", label: "Orders (ag-Grid)", icon: CreditCard },
-          { id: "products", label: "Products", icon: Package },
+          { id: "orders", label: "Ticking Orders (ag-Grid)", icon: Clock },
+          { id: "products", label: "Products Catalog", icon: Package },
           { id: "customers", label: "Customers", icon: Users },
           { id: "forecasting", label: "AI Forecasting", icon: TrendingUp },
           { id: "ai-analyst", label: "AI RAG Analyst", icon: Brain },
@@ -492,8 +501,8 @@ export default function DashboardPage() {
                           <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
                           <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
                           <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: '12px', border: 'none', color: '#fff' }} />
-                          <Area type="monotone" dataKey="Electronics" stroke="#6366f1" fillOpacity={0.25} fill="url(#colorIndigo)" name="Electronics" stackId="1" />
-                          <Area type="monotone" dataKey="Clothing" stroke="#f59e0b" fillOpacity={0.25} fill="url(#colorAmber)" name="Clothing" stackId="1" />
+                          <Area type="monotone" dataKey="Electronics" stroke="#6366f1" fillOpacity={0.25} fill="#6366f1" name="Electronics" stackId="1" />
+                          <Area type="monotone" dataKey="Clothing" stroke="#f59e0b" fillOpacity={0.25} fill="#f59e0b" name="Clothing" stackId="1" />
                           <Area type="monotone" dataKey="Home" stroke="#10b981" fillOpacity={0.25} fill="#10b981" name="Home" stackId="1" />
                           <Area type="monotone" dataKey="Books" stroke="#06b6d4" fillOpacity={0.25} fill="#06b6d4" name="Books" stackId="1" />
                         </AreaChart>
@@ -526,7 +535,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 2: ORDERS */}
+          {/* TAB 2: ORDERS (ag-Grid) */}
           {activeTab === "orders" && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center gap-3 justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-200 dark:border-slate-800 backdrop-blur-md">
@@ -534,14 +543,14 @@ export default function DashboardPage() {
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <input
                     type="search"
-                    placeholder="Search in-memory orders by Customer..."
+                    placeholder="Search ticking orders by Customer..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
                     className="pl-9 h-9 w-full rounded-lg border border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                   />
                 </div>
                 <div className="text-xs text-muted-foreground font-semibold">
-                  Filtered {ordersRowData.length.toLocaleString()} of {transactions.length.toLocaleString()} entries
+                  Ticking {ordersRowData.length.toLocaleString()} items from Django stream
                 </div>
               </div>
 
@@ -620,7 +629,7 @@ export default function DashboardPage() {
                   <button
                     onClick={() => setProductPage(p => Math.max(1, p - 1))}
                     disabled={productPage === 1}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     Previous
@@ -631,7 +640,7 @@ export default function DashboardPage() {
                   <button
                     onClick={() => setProductPage(p => Math.min(productsStats.totalPages, p + 1))}
                     disabled={productPage >= productsStats.totalPages}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors cursor-pointer"
                   >
                     Next
                     <ChevronRight className="w-4 h-4" />
@@ -722,13 +731,6 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
                     <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-sm">
-                      <thead className="bg-slate-50 dark:bg-slate-900/60 font-semibold">
-                        <tr>
-                          <th className="px-6 py-3">Customer ID / Email</th>
-                          <th className="px-6 py-3">Order Counts</th>
-                          <th className="px-6 py-3">Lifetime Value (LTV)</th>
-                        </tr>
-                      </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                         {filteredCustomers.length === 0 ? (
                           <tr>
@@ -824,7 +826,7 @@ export default function DashboardPage() {
                     AI RAG Automated Analyst
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Analyzes live in-memory store metrics, indexes custom guidelines, and returns automated reports.
+                    Analyzes live SQLite DB metrics via Django, indexes custom guidelines, and returns generative reports.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -866,7 +868,7 @@ export default function DashboardPage() {
                       <div className="space-y-2">
                         <label className="font-semibold text-slate-500 flex items-center justify-between">
                           <span>Operational Policies</span>
-                          <span className="text-[10px] text-indigo-500 font-normal">Vector search augments context</span>
+                          <span className="text-[10px] text-indigo-500 font-normal">Vector search filters context</span>
                         </label>
                         <textarea
                           value={ragGuidelines}
@@ -942,7 +944,7 @@ export default function DashboardPage() {
                           {isRAGPending && (
                             <div className="text-indigo-400 animate-pulse flex items-center gap-2 mt-1">
                               <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
-                              Connecting Gemini-2.5-Flash intelligence core...
+                              Connecting Django backend AI core...
                             </div>
                           )}
                           <div ref={consoleEndRef} />
