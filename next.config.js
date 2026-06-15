@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Output standalone for optimized deployment
+  output: 'standalone',
+
   // 1. Disable browser source maps to prevent high memory usage during compiling
   productionBrowserSourceMaps: false,
 
