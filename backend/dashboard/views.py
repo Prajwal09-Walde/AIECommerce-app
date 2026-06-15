@@ -1,4 +1,5 @@
 import json
+import asyncio
 import time
 import re
 import urllib.request
@@ -276,7 +277,6 @@ def seed_synthetic_data():
             ))
             
         Transaction.objects.bulk_create(new_tx)
-
 def stream_transactions(request):
     """
     Server-Sent Events (SSE) live-ticking transaction stream.
@@ -285,12 +285,11 @@ def stream_transactions(request):
     seed_synthetic_data()
     speed = float(request.GET.get("speed", 0.5))
     
-    transactions = Transaction.objects.all().order_by("purchase_date")
-    
-    def event_stream():
+    async def event_stream():
         yield "event: start\ndata: {}\n\n"
-        for t in transactions:
-            # Yield as an SSE event
+        
+        # Stream historical transactions
+        async for t in Transaction.objects.all().order_by("purchase_date"):
             payload = {
                 "userId": t.user_id,
                 "productId": t.product_id,
@@ -302,12 +301,14 @@ def stream_transactions(request):
                 "purchaseDate": t.purchase_date.isoformat()
             }
             yield f"data: {json.dumps(payload)}\n\n"
-            time.sleep(speed)
+            await asyncio.sleep(speed)
             
         # Continue generating real-time transactions endlessly
         categories = ["Electronics", "Clothing", "Home", "Books"]
         payment_methods = ["Credit Card", "PayPal", "Bank Transfer", "Crypto"]
-        products = list(Product.objects.all())
+        
+        # Load products asynchronously
+        products = [p async for p in Product.objects.all()]
         
         # Group products by category
         products_by_category = {}
@@ -316,51 +317,56 @@ def stream_transactions(request):
                 products_by_category[p.category] = []
             products_by_category[p.category].append(p)
             
-        while True:
-            cat = random.choice(categories)
-            prod_list = products_by_category.get(cat, [])
-            if not prod_list:
-                product = random.choice(products) if products else None
-            else:
-                product = random.choice(prod_list)
+        try:
+            while True:
+                cat = random.choice(categories)
+                prod_list = products_by_category.get(cat, [])
+                if not prod_list:
+                    product = random.choice(products) if products else None
+                else:
+                    product = random.choice(prod_list)
+                    
+                if product:
+                    discount = random.choice([0, 10, 15, 20])
+                    final_price = product.price * (1 - discount/100)
+                    user_id = f"user_{random.randint(100, 250)}@example.com"
+                    pm = random.choice(payment_methods)
+                    now = timezone.now()
+                    
+                    # Save newly created transaction to database asynchronously
+                    t = await Transaction.objects.acreate(
+                        user_id=user_id,
+                        product_id=product.product_id,
+                        category=product.category,
+                        price=product.price,
+                        discount=discount,
+                        final_price=final_price,
+                        payment_method=pm,
+                        purchase_date=now
+                    )
+                    
+                    payload = {
+                        "userId": t.user_id,
+                        "productId": t.product_id,
+                        "category": t.category,
+                        "price": t.price,
+                        "discount": t.discount,
+                        "finalPrice": t.final_price,
+                        "paymentMethod": t.payment_method,
+                        "purchaseDate": t.purchase_date.isoformat()
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
                 
-            if product:
-                discount = random.choice([0, 10, 15, 20])
-                final_price = product.price * (1 - discount/100)
-                user_id = f"user_{random.randint(100, 250)}@example.com"
-                pm = random.choice(payment_methods)
-                now = timezone.now()
-                
-                # Save newly created transaction to database
-                t = Transaction.objects.create(
-                    user_id=user_id,
-                    product_id=product.product_id,
-                    category=product.category,
-                    price=product.price,
-                    discount=discount,
-                    final_price=final_price,
-                    payment_method=pm,
-                    purchase_date=now
-                )
-                
-                payload = {
-                    "userId": t.user_id,
-                    "productId": t.product_id,
-                    "category": t.category,
-                    "price": t.price,
-                    "discount": t.discount,
-                    "finalPrice": t.final_price,
-                    "paymentMethod": t.payment_method,
-                    "purchaseDate": t.purchase_date.isoformat()
-                }
-                yield f"data: {json.dumps(payload)}\n\n"
-            
-            time.sleep(speed)
-        
+                await asyncio.sleep(speed)
+        except asyncio.CancelledError:
+            # Handle clean client disconnect
+            pass
+
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response['Cache-Control'] = 'no-cache'
     response['X-Accel-Buffering'] = 'no'
     return response
+
 
 @csrf_exempt
 def rag_analysis(request):
