@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export function useKaggleData() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -26,7 +28,7 @@ export function useKaggleData() {
     }
     
     try {
-      await fetch("http://localhost:8000/api/reset/", {
+      await fetch(`${API_URL}/api/reset/`, {
         method: "POST"
       });
     } catch (e) {
@@ -49,7 +51,7 @@ export function useKaggleData() {
       setTransactions([]);
       setIsStreaming(true);
 
-      const streamUrl = `http://localhost:8000/api/stream/?speed=${speedVal}`;
+      const streamUrl = `${API_URL}/api/stream/?speed=${speedVal}`;
       const es = new EventSource(streamUrl);
       eventSourceRef.current = es;
 

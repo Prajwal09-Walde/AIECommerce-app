@@ -66,6 +66,8 @@ import { ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const PRESETS = [
   {
     title: "Competitor Strategy & Clearance",
@@ -312,7 +314,7 @@ export default function DashboardPage() {
         setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Query tokenization active. Querying document space...`]);
         
         try {
-          const res = await fetch("http://localhost:8000/api/analyze/", {
+          const res = await fetch(`${API_URL}/api/analyze/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
