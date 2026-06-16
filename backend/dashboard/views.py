@@ -7,7 +7,7 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from .models import Transaction, Product
-import google.generativeai as genai
+from google import genai
 import os
 
 # Helper: local vector chunking
@@ -469,12 +469,15 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
         # Set api key from env
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            # Fallback hardcoded if loaded from env fail
-            api_key = "AIzaSyDSn79PG64LepTLc7-lLBnisR3e6meDz6I"
+            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] ERROR: GEMINI_API_KEY not set.")
+        return JsonResponse({"success": False, "logs": logs, "error": "GEMINI_API_KEY not configured"}, status=500)
             
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        result = model.generate_content(system_prompt)
+        # NEW (correct)
+        client = genai.Client(api_key=api_key)
+        result = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=system_prompt
+        )
         response_text = result.text.strip()
         
         logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Generation completed successfully.")
