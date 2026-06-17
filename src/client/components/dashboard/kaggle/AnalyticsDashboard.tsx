@@ -132,7 +132,12 @@ export const KaggleAnalyticsDashboard = () => {
         paymentMethod,
       });
 
-      const response = await fetch(`/api/kaggle-transactions?${params.toString()}`);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+      // In fetchStats:
+      const response = await fetch(`${API_URL}/api/kaggle-transactions/stats`);
+      // In fetchTransactions:
+      const res = await fetch(`${API_URL}/api/kaggle-transactions?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch transaction records");
       const data = await response.json();
       

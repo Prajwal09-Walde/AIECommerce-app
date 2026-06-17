@@ -153,5 +153,16 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "origin",
+    "cache-control",
+]
+
+# Allow SSE streaming responses
+CORS_EXPOSE_HEADERS = ["Content-Type", "Cache-Control", "X-Accel-Buffering"]
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

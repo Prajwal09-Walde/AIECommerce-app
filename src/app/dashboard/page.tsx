@@ -66,7 +66,7 @@ import { ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const PRESETS = [
   {
@@ -282,7 +282,10 @@ export default function DashboardPage() {
   }, [customersStats, customerSearch]);
 
   useEffect(() => {
-    startStreaming(streamSpeed);
+    const timer = setTimeout(() => {
+      startStreaming(streamSpeed);
+    }, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   // RAG Analysis Runner - Connects to Python Django REST API
@@ -312,16 +315,22 @@ export default function DashboardPage() {
       startRAGTransition(async () => {
         setRAGActiveStep(2);
         setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Query tokenization active. Querying document space...`]);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
         
         try {
           const res = await fetch(`${API_URL}/api/analyze/`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify({ focus: ragFocus, guidelines: ragGuidelines }),
+            signal: controller.signal
           });
+          clearTimeout(timeout);
 
+          if (!res.ok) {
+            throw new Error(`Backend API Error: ${res.status} ${res.statusText}`)
+          }
           const result = await res.json();
           
           if (result.success && result.analysis) {
@@ -343,8 +352,10 @@ export default function DashboardPage() {
             setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ERROR: ${result.error}`]);
           }
         } catch (err: any) {
+          clearTimeout(timeout);
+          const msg = err.name === "AbortError" ? "Request timed out after 30s" : err.message;
           setRAGActiveStep(null);
-          setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ERROR: ${err.message}`]);
+          setRAGLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ERROR: ${msg}`]);
         }
       });
     }, timer);
