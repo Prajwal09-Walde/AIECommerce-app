@@ -507,3 +507,113 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
             "logs": logs,
             "error": str(e)
         }, status=500)
+
+def kaggle_stats(request):
+    """Returns summary statistics for the Kaggle analytics dashboard."""
+    if request.method != "GET":
+        return JsonResponse({"error": "GET request expected"}, status=405)
+
+    products = list(Product.objects.all().values())
+    transactions = list(Transaction.objects.all().values())
+
+    if not transactions:
+        return JsonResponse({"hasData": False})
+
+    total_revenue = sum(t["final_price"] for t in transactions)
+    total_transactions = len(transactions)
+    avg_discount = sum(t["discount"] for t in transactions) / total_transactions
+    unique_users = len(set(t["user_id"] for t in transactions))
+    unique_products = len(set(t["product_id"] for t in transactions))
+
+    # Category breakdown
+    category_map = {}
+    for t in transactions:
+        cat = t["category"]
+        if cat not in category_map:
+            category_map[cat] = {"revenue": 0, "transactions": 0}
+        category_map[cat]["revenue"] += t["final_price"]
+        category_map[cat]["transactions"] += 1
+    categories = [{"name": k, **v} for k, v in category_map.items()]
+
+    # Payment method breakdown
+    payment_map = {}
+    for t in transactions:
+        pm = t["payment_method"]
+        if pm not in payment_map:
+            payment_map[pm] = {"revenue": 0, "transactions": 0}
+        payment_map[pm]["revenue"] += t["final_price"]
+        payment_map[pm]["transactions"] += 1
+    payments = [{"name": k, **v} for k, v in payment_map.items()]
+
+    # Daily revenue trend
+    trend_map = {}
+    for t in transactions:
+        date_str = t["purchase_date"].strftime("%Y-%m-%d")
+        if date_str not in trend_map:
+            trend_map[date_str] = {"revenue": 0, "transactions": 0}
+        trend_map[date_str]["revenue"] += t["final_price"]
+        trend_map[date_str]["transactions"] += 1
+    trends = [{"date": k, **v} for k, v in sorted(trend_map.items())]
+
+    return JsonResponse({
+        "hasData": True,
+        "summary": {
+            "totalRevenue": total_revenue,
+            "totalTransactions": total_transactions,
+            "averageDiscount": avg_discount,
+            "uniqueUsers": unique_users,
+            "uniqueProducts": unique_products,
+        },
+        "categories": categories,
+        "payments": payments,
+        "trends": trends,
+    })
+
+
+def kaggle_transactions(request):
+    """Returns paginated, filtered transactions for the Kaggle explorer table."""
+    if request.method != "GET":
+        return JsonResponse({"error": "GET request expected"}, status=405)
+
+    page = int(request.GET.get("page", 1))
+    limit = int(request.GET.get("limit", 50))
+    search = request.GET.get("search", "").strip()
+    category = request.GET.get("category", "").strip()
+    payment_method = request.GET.get("paymentMethod", "").strip()
+
+    qs = Transaction.objects.all().order_by("-purchase_date")
+
+    if search:
+        qs = qs.filter(user_id__icontains=search) | qs.filter(product_id__icontains=search)
+    if category:
+        qs = qs.filter(category=category)
+    if payment_method:
+        qs = qs.filter(payment_method=payment_method)
+
+    total = qs.count()
+    total_pages = max(1, (total + limit - 1) // limit)
+    offset = (page - 1) * limit
+    page_qs = qs[offset:offset + limit]
+
+    transactions = []
+    for t in page_qs:
+        transactions.append({
+            "userId": t.user_id,
+            "productId": t.product_id,
+            "category": t.category,
+            "price": t.price,
+            "discount": t.discount,
+            "finalPrice": t.final_price,
+            "paymentMethod": t.payment_method,
+            "purchaseDate": t.purchase_date.isoformat(),
+        })
+
+    return JsonResponse({
+        "transactions": transactions,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": total_pages,
+        }
+    })
