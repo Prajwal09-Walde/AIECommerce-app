@@ -2,5 +2,27 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "rewrites": [
+    {
+      "source": "/api/stream/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/stream/:path*"
+    },
+    {
+      "source": "/api/analyze/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/analyze/:path*"
+    },
+    {
+      "source": "/api/kaggle-transactions/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/kaggle-transactions/:path*"
+    },
+    {
+      "source": "/api/initialize/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/initialize/:path*"
+    },
+    {
+      "source": "/api/reset/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/reset/:path*"
+    }
+  ]
 }
