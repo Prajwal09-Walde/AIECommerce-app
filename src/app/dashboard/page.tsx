@@ -381,7 +381,7 @@ export default function DashboardPage() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-md">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Django Live Stream Dashboard</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">AI E-Commerce Dashboard</h2>
             <span className={`flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold border transition ${
               isStreaming 
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 animate-pulse" 
