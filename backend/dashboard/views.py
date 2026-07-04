@@ -470,7 +470,7 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] ERROR: GEMINI_API_KEY not set.")
-        return JsonResponse({"success": False, "logs": logs, "error": "GEMINI_API_KEY not configured"}, status=500)
+            return JsonResponse({"success": False, "logs": logs, "error": "GEMINI_API_KEY not configured"}, status=500)
             
         # NEW (correct)
         client = genai.Client(api_key=api_key)
