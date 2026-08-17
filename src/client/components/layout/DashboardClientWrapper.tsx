@@ -22,6 +22,7 @@ export const DashboardClientWrapper = ({
 
   return (
     <div className="h-screen relative flex overflow-hidden bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 transition-colors">
+      <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
       <main className="flex-1 flex flex-col h-full w-full overflow-hidden transition-all duration-300 ease-in-out">
         {/* Desktop & Mobile Header Wrapper */}
         <div className="flex w-full items-center bg-background border-b z-[70] relative">

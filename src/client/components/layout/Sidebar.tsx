@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles, Menu, Database } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LineChart, BellRing, ChevronLeft, ChevronRight, Sparkles, Menu, Database, Bell, Brain, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const routes = [
@@ -43,10 +43,28 @@ const routes = [
     color: "text-emerald-500",
   },
   {
-    label: "AI RAG Analyst",
+    label: "AI Analytics (ReAct)",
     icon: Sparkles,
     href: "/dashboard/ai-analysis",
     color: "text-amber-500",
+  },
+  {
+    label: "Proactive Alerts",
+    icon: Bell,
+    href: "/dashboard/alerts",
+    color: "text-red-500",
+  },
+  {
+    label: "Dynamic Pricing",
+    icon: DollarSign,
+    href: "/dashboard/pricing",
+    color: "text-blue-500",
+  },
+  {
+    label: "Autonomous Manager",
+    icon: Brain,
+    href: "/dashboard/store-manager",
+    color: "text-purple-500",
   },
   {
     label: "Alerts",
@@ -65,7 +83,7 @@ export const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
   const pathname = usePathname();
 
   return (
-    <div className="space-y-4 py-4 flex flex-col h-full bg-white/70 dark:bg-black/70 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 transition-colors">
+    <div className={cn("space-y-4 py-4 flex flex-col h-full bg-white/70 dark:bg-black/70 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out shrink-0", isCollapsed ? "w-16" : "w-64")}>
       <div className="px-3 py-2 flex-1 relative">
         {/* Toggle Button */}
         <button 
