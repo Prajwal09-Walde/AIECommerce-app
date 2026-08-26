@@ -79,20 +79,17 @@ export const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
   return (
     <div className={cn("space-y-4 py-4 flex flex-col h-full bg-white/70 dark:bg-black/70 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out shrink-0", isCollapsed ? "w-16" : "w-64")}>
       <div className="px-3 py-2 flex-1 relative">
-        {/* Toggle Button */}
-        <button 
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-4 top-6 bg-amber-500 text-black rounded-full p-1 shadow-md hover:bg-amber-400 z-[90] transition-colors"
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          <Menu className="w-4 h-4" />
-        </button>
-
-        <Link href="/dashboard" className={cn("flex items-center mb-14 transition-all duration-300", isCollapsed ? "justify-center" : "pl-3")}>
-          <div className="relative w-8 h-8 flex-shrink-0 bg-gradient-to-br from-indigo-600 to-amber-500 rounded-lg flex items-center justify-center shadow-lg">
-            <LineChart className="text-white w-5 h-5" />
-          </div>
-        </Link>
+        {/* Header / Menu Toggle */}
+        <div className={cn("flex items-center mb-6 transition-all duration-300", isCollapsed ? "justify-center" : "justify-between pl-3")}>
+          {!isCollapsed && <span className="font-semibold text-xs uppercase tracking-wider text-slate-400">Navigation</span>}
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 p-1.5 rounded-lg transition-colors"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
         <div className="space-y-2">
           {routes.map((route) => (
             <Link
