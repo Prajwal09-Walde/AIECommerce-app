@@ -1,6 +1,6 @@
 "use server";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
 
 /**
  * Create a new business goal delegating to Django Python agent.

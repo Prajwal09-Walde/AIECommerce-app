@@ -1,6 +1,6 @@
 "use server";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
 
 /**
  * Runs a single turn of the ReAct analytics agent delegating to the Django Python agent.
