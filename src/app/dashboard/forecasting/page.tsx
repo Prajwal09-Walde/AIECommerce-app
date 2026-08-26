@@ -94,12 +94,13 @@ export default function ForecastingPage() {
               <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v.toLocaleString()}`} />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'rgba(0,0,0,0.85)', 
+                  backgroundColor: 'rgba(15, 23, 42, 0.95)', 
                   borderRadius: '12px', 
-                  border: 'none', 
-                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.1)', 
                   boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' 
-                }} 
+                }}
+                itemStyle={{ color: '#f8fafc' }}
+                labelStyle={{ color: '#94a3b8', fontWeight: '600', marginBottom: '4px' }}
               />
               <Legend verticalAlign="top" height={36} iconType="circle" />
               <Line 

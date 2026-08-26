@@ -10,6 +10,7 @@ export async function getForecastingData() {
   const orderCount = await Order.countDocuments({});
   const hasDistributedData = orderCount > 0;
 
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   let rawTimeline: Array<{ date: string; revenue: number }> = [];
 
   if (hasDistributedData) {
@@ -25,17 +26,28 @@ export async function getForecastingData() {
     ]);
     rawTimeline = dailyAgg.map(t => ({ date: t._id, revenue: parseFloat(t.revenue.toFixed(2)) }));
   } else {
-    // 2. Group raw transactions daily
-    const dailyAgg = await KaggleTransaction.aggregate([
-      {
-        $group: {
-          _id: { $dateToString: { format: "%m/%d", date: "$purchaseDate" } },
-          revenue: { $sum: "$finalPrice" }
+    // 2. Group raw transactions daily from Django SQLite database
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/kaggle-transactions/stats`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const stats = await res.json();
+        if (stats.hasData && stats.trends) {
+          rawTimeline = stats.trends.map((t: any) => {
+            const parts = t.date.split("-");
+            const mmdd = parts.length === 3 ? `${parts[1]}/${parts[2]}` : t.date;
+            return {
+              date: mmdd,
+              revenue: parseFloat(t.revenue.toFixed(2))
+            };
+          });
         }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    rawTimeline = dailyAgg.map(t => ({ date: t._id, revenue: parseFloat(t.revenue.toFixed(2)) }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch forecasting data from Django:", error);
+    }
   }
 
   // Fallback if there's no data

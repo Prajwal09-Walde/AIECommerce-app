@@ -139,11 +139,7 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-CORS_ALLOWED_ORIGINS = [
-    "https://aiecommerce-app.vercel.app",
-    "https://aie-commerce-app.vercel.app",
-    "http://localhost:3000",
-]
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True
 

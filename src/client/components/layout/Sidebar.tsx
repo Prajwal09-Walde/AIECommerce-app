@@ -66,12 +66,6 @@ const routes = [
     href: "/dashboard/store-manager",
     color: "text-purple-500",
   },
-  {
-    label: "Alerts",
-    icon: BellRing,
-    href: "/dashboard/alerts",
-    color: "text-red-500",
-  },
 ];
 
 interface SidebarProps {
@@ -98,11 +92,6 @@ export const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
           <div className="relative w-8 h-8 flex-shrink-0 bg-gradient-to-br from-indigo-600 to-amber-500 rounded-lg flex items-center justify-center shadow-lg">
             <LineChart className="text-white w-5 h-5" />
           </div>
-          {!isCollapsed && (
-            <h1 className="text-2xl font-bold ml-4 text-slate-900 dark:text-white truncate">
-              Analytics AI
-            </h1>
-          )}
         </Link>
         <div className="space-y-2">
           {routes.map((route) => (
