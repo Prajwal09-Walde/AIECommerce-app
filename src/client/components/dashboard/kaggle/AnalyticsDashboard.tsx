@@ -92,7 +92,8 @@ export const KaggleAnalyticsDashboard = () => {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const response = await fetch("/api/kaggle-transactions/stats");
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${API_URL}/api/kaggle-transactions/stats`);
       if (!response.ok) throw new Error("Failed to load statistics");
       const data = await response.json();
       setStats(data);
@@ -133,17 +134,13 @@ export const KaggleAnalyticsDashboard = () => {
       });
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      // In fetchStats:
-      const response = await fetch(`${API_URL}/api/kaggle-transactions/stats`);
-      // In fetchTransactions:
       const res = await fetch(`${API_URL}/api/kaggle-transactions?${params.toString()}`);
-      if (!response.ok) throw new Error("Failed to fetch transaction records");
-      const data = await response.json();
+      if (!res.ok) throw new Error("Failed to fetch transaction records");
+      const data = await res.json();
       
       setRowData(data.transactions || []);
-      setTotalPages(data.pagination.totalPages || 1);
-      setTotalCount(data.pagination.total || 0);
+      setTotalPages(data?.pagination?.totalPages || 1);
+      setTotalCount(data?.pagination?.total || 0);
     } catch (err: any) {
       console.error(err);
       toast({

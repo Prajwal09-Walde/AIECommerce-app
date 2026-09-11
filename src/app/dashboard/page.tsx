@@ -637,7 +637,7 @@ export default function DashboardPage() {
               </div>
 
               {/* In-Memory Product Pagination */}
-              {productsStats.totalPages > 1 && (
+              {(productsStats?.totalPages || 0) > 1 && (
                 <div className="flex items-center justify-center gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
                   <button
                     onClick={() => setProductPage(p => Math.max(1, p - 1))}
@@ -648,11 +648,11 @@ export default function DashboardPage() {
                     Previous
                   </button>
                   <span className="text-sm font-semibold text-slate-500">
-                    Page {productPage} of {productsStats.totalPages}
+                    Page {productPage} of {productsStats?.totalPages || 1}
                   </span>
                   <button
-                    onClick={() => setProductPage(p => Math.min(productsStats.totalPages, p + 1))}
-                    disabled={productPage >= productsStats.totalPages}
+                    onClick={() => setProductPage(p => Math.min(productsStats?.totalPages || 1, p + 1))}
+                    disabled={productPage >= (productsStats?.totalPages || 1)}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors cursor-pointer"
                   >
                     Next
