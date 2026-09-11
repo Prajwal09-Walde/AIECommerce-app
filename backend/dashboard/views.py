@@ -1,18 +1,39 @@
 import json
 import asyncio
+import uuid
 import time
 import re
 import urllib.request
 import random
 import os
+import math
 import statistics
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Avg, Q
+from django.db.models.functions import TruncDate
 from .models import Transaction, Product, Alert, GoalPlan, PriceHistory, AgentMessage
 from google import genai
 from google.genai import types
+
+def to_uuid(val):
+    """Safely converts string, int, or UUID to a valid UUID."""
+    if not val:
+        return uuid.uuid4()
+    if isinstance(val, uuid.UUID):
+        return val
+    try:
+        return uuid.UUID(str(val))
+    except (ValueError, AttributeError):
+        return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
+
+def find_product(identifier):
+    """Resolves a product by primary key id (UUID or string representation)."""
+    if not identifier:
+        return None
+    prod_uuid = to_uuid(identifier)
+    return Product.objects.filter(id=prod_uuid).first()
 
 # Helper: local vector chunking
 def retrieve_guidelines(guidelines_text, query, top_k=3):
@@ -76,9 +97,11 @@ def initialize_data(request):
             except Exception:
                 purchase_date = timezone.now()
                 
+            prod_uuid = to_uuid(t.get("productId"))
+            p_id = str(prod_uuid)
             new_transactions.append(Transaction(
                 user_id=t.get("userId", ""),
-                product_id=t.get("productId", ""),
+                product_id=p_id,
                 category=t.get("category", "General"),
                 price=float(t.get("price", 0)),
                 discount=float(t.get("discount", 0)),
@@ -87,14 +110,13 @@ def initialize_data(request):
                 purchase_date=purchase_date
             ))
             
-            p_id = t.get("productId", "")
             if p_id not in unique_products:
                 # Stock formula based on product ID character hash
                 chars_hash = sum(ord(c) for c in p_id)
                 stock = (chars_hash % 80) + 20
                 unique_products[p_id] = {
-                    "product_id": p_id,
-                    "name": f"Product-{p_id}",
+                    "id": prod_uuid,
+                    "name": f"Product-{p_id[:8]}",
                     "category": t.get("category", "General"),
                     "price": float(t.get("price", 0)),
                     "stock": stock
@@ -167,7 +189,7 @@ def seed_synthetic_data():
             stock = (chars_hash % 80) + 20
             
             new_products.append(Product(
-                product_id=p_id,
+                id=to_uuid(p_id),
                 name=name,
                 category=cat,
                 price=price,
@@ -188,7 +210,6 @@ def seed_synthetic_data():
             if cat not in products_by_category:
                 products_by_category[cat] = [
                     Product.objects.create(
-                        product_id=f"P-fallback-{random.randint(100, 999)}",
                         name=f"Fallback {cat} Product",
                         category=cat,
                         price=29.99,
@@ -215,7 +236,7 @@ def seed_synthetic_data():
             
             new_tx.append(Transaction(
                 user_id=user_id,
-                product_id=product.product_id,
+                product_id=str(product.id),
                 category=cat,
                 price=product.price,
                 discount=discount,
@@ -241,7 +262,7 @@ def seed_synthetic_data():
                 chars_hash = sum(ord(c) for c in p_id)
                 stock = (chars_hash % 80) + 20
                 new_products.append(Product(
-                    product_id=p_id,
+                    id=to_uuid(p_id),
                     name=name,
                     category=cat,
                     price=price,
@@ -269,7 +290,7 @@ def seed_synthetic_data():
             
             new_tx.append(Transaction(
                 user_id=user_id,
-                product_id=p_id,
+                product_id=str(to_uuid(p_id)),
                 category=cat,
                 price=price,
                 discount=discount,
@@ -329,7 +350,7 @@ def stream_transactions(request):
                     
                     t = await Transaction.objects.acreate(
                         user_id=user_id,
-                        product_id=product.product_id,
+                        product_id=str(product.id),
                         category=product.category,
                         price=product.price,
                         discount=discount,
@@ -364,21 +385,15 @@ def rag_analysis(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST request expected"}, status=405)
         
-    logs = []
     try:
         data = json.loads(request.body)
         focus = data.get("focus", "price optimization")
         custom_guidelines = data.get("guidelines", "")
         
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Python RAG analyst initialized.")
-        
         products = list(Product.objects.all().values())
         transactions = list(Transaction.objects.all().values())
         
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Context acquired: {len(products)} products and {len(transactions)} transactions.")
-        
         retrieved_chunks = retrieve_guidelines(custom_guidelines, focus, 3)
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Context matching retrieved {len(retrieved_chunks)} guideline clauses.")
         
         total_revenue = sum(t["final_price"] for t in transactions)
         avg_order = (total_revenue / len(transactions)) if transactions else 0
@@ -451,12 +466,9 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
   ]
 }}"""
         
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Packaging prompt. Dispatching request to Gemini API...")
-        
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] ERROR: GEMINI_API_KEY not set.")
-            return JsonResponse({"success": False, "logs": logs, "error": "GEMINI_API_KEY not configured"}, status=500)
+            return JsonResponse({"success": False, "logs": [], "error": "GEMINI_API_KEY not configured"}, status=500)
             
         client = genai.Client(api_key=api_key)
         result = client.models.generate_content(
@@ -464,8 +476,6 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
             contents=system_prompt
         )
         response_text = result.text.strip()
-        
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Generation completed successfully.")
         
         if response_text.startswith("```json"):
             response_text = response_text[7:]
@@ -476,19 +486,17 @@ Your final response MUST be a JSON object ONLY, valid for JSON.parse, using the 
         response_text = response_text.strip()
         
         analysis = json.loads(response_text)
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Synthesis parsed successfully.")
         
         return JsonResponse({
             "success": True,
-            "logs": logs,
+            "logs": [],
             "retrievedChunks": retrieved_chunks,
             "analysis": analysis
         })
     except Exception as e:
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
         return JsonResponse({
             "success": False,
-            "logs": logs,
+            "logs": [],
             "error": str(e)
         }, status=500)
 
@@ -496,44 +504,40 @@ def kaggle_stats(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET request expected"}, status=405)
 
-    products = list(Product.objects.all().values())
-    transactions = list(Transaction.objects.all().values())
-
-    if not transactions:
+    if not Transaction.objects.exists():
         return JsonResponse({"hasData": False})
 
-    total_revenue = sum(t["final_price"] for t in transactions)
-    total_transactions = len(transactions)
-    avg_discount = sum(t["discount"] for t in transactions) / total_transactions
-    unique_users = len(set(t["user_id"] for t in transactions))
-    unique_products = len(set(t["product_id"] for t in transactions))
+    agg = Transaction.objects.aggregate(
+        total_revenue=Sum("final_price"),
+        total_transactions=Count("id"),
+        avg_discount=Avg("discount")
+    )
 
-    category_map = {}
-    for t in transactions:
-        cat = t["category"]
-        if cat not in category_map:
-            category_map[cat] = {"revenue": 0, "transactions": 0}
-        category_map[cat]["revenue"] += t["final_price"]
-        category_map[cat]["transactions"] += 1
-    categories = [{"name": k, **v} for k, v in category_map.items()]
+    total_revenue = round(agg["total_revenue"] or 0.0, 2)
+    total_transactions = agg["total_transactions"] or 0
+    avg_discount = round(agg["avg_discount"] or 0.0, 2)
+    unique_users = Transaction.objects.values("user_id").distinct().count()
+    unique_products = Product.objects.count()
 
-    payment_map = {}
-    for t in transactions:
-        pm = t["payment_method"]
-        if pm not in payment_map:
-            payment_map[pm] = {"revenue": 0, "transactions": 0}
-        payment_map[pm]["revenue"] += t["final_price"]
-        payment_map[pm]["transactions"] += 1
-    payments = [{"name": k, **v} for k, v in payment_map.items()]
+    cat_qs = Transaction.objects.values("category").annotate(
+        revenue=Sum("final_price"),
+        transactions=Count("id")
+    ).order_by("-revenue")
+    categories = [{"name": c["category"], "revenue": round(c["revenue"], 2), "transactions": c["transactions"]} for c in cat_qs]
 
-    trend_map = {}
-    for t in transactions:
-        date_str = t["purchase_date"].strftime("%Y-%m-%d")
-        if date_str not in trend_map:
-            trend_map[date_str] = {"revenue": 0, "transactions": 0}
-        trend_map[date_str]["revenue"] += t["final_price"]
-        trend_map[date_str]["transactions"] += 1
-    trends = [{"date": k, **v} for k, v in sorted(trend_map.items())]
+    pm_qs = Transaction.objects.values("payment_method").annotate(
+        revenue=Sum("final_price"),
+        transactions=Count("id")
+    ).order_by("-revenue")
+    payments = [{"name": p["payment_method"], "revenue": round(p["revenue"], 2), "transactions": p["transactions"]} for p in pm_qs]
+
+    trend_qs = Transaction.objects.annotate(
+        date=TruncDate("purchase_date")
+    ).values("date").annotate(
+        revenue=Sum("final_price"),
+        transactions=Count("id")
+    ).order_by("date")
+    trends = [{"date": t["date"].strftime("%Y-%m-%d") if t["date"] else "", "revenue": round(t["revenue"], 2), "transactions": t["transactions"]} for t in trend_qs]
 
     return JsonResponse({
         "hasData": True,
@@ -595,6 +599,297 @@ def kaggle_transactions(request):
             "totalPages": total_pages,
         }
     })
+
+
+# ─────────────────────────────────────────────────────────────
+# Products, Customers & Orders REST Endpoints
+# ─────────────────────────────────────────────────────────────
+
+@csrf_exempt
+def products_api(request):
+    if request.method == "GET":
+        try:
+            page = max(1, int(request.GET.get("page", 1)))
+            limit = max(1, min(100, int(request.GET.get("limit", 24))))
+            search = request.GET.get("search", "").strip()
+            category = request.GET.get("category", "").strip()
+            
+            qs = Product.objects.all().order_by("name")
+            if search:
+                qs = qs.filter(Q(name__icontains=search) | Q(category__icontains=search))
+            if category:
+                qs = qs.filter(category__iexact=category)
+                
+            total = qs.count()
+            skip = (page - 1) * limit
+            products = list(qs[skip : skip + limit].values())
+            
+            return JsonResponse({
+                "products": [{
+                    "id": str(p["id"]),
+                    "_id": str(p["id"]),
+                    "name": p["name"],
+                    "category": p["category"],
+                    "price": float(p["price"]),
+                    "stock": int(p["stock"]),
+                } for p in products],
+                "total": total,
+                "totalPages": math.ceil(total / limit) if limit else 1,
+                "page": page
+            })
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+            
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            name = data.get("name", "").strip()
+            category = data.get("category", "General").strip()
+            price = float(data.get("price", 0.0))
+            stock = int(data.get("stock", 0))
+            
+            if not name:
+                return JsonResponse({"success": False, "error": "Product name is required"}, status=400)
+                
+            product = Product.objects.create(
+                name=name,
+                category=category,
+                price=price,
+                stock=stock
+            )
+            return JsonResponse({
+                "success": True,
+                "product": {
+                    "id": str(product.id),
+                    "_id": str(product.id),
+                    "name": product.name,
+                    "category": product.category,
+                    "price": product.price,
+                    "stock": product.stock,
+                }
+            }, status=201)
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+            
+    return JsonResponse({"error": "Method not allowed"}, status=405)
+
+
+@csrf_exempt
+def product_detail_api(request, product_id):
+    product = find_product(product_id)
+    if not product:
+        return JsonResponse({"success": False, "error": "Product not found"}, status=404)
+        
+    if request.method == "GET":
+        return JsonResponse({
+            "id": str(product.id),
+            "_id": str(product.id),
+            "name": product.name,
+            "category": product.category,
+            "price": product.price,
+            "stock": product.stock,
+        })
+        
+    elif request.method in ["PUT", "PATCH"]:
+        try:
+            data = json.loads(request.body)
+            if "name" in data:
+                product.name = data["name"]
+            if "category" in data:
+                product.category = data["category"]
+            if "price" in data:
+                product.price = float(data["price"])
+            if "stock" in data:
+                product.stock = int(data["stock"])
+            product.save()
+            return JsonResponse({
+                "success": True,
+                "product": {
+                    "id": str(product.id),
+                    "_id": str(product.id),
+                    "name": product.name,
+                    "category": product.category,
+                    "price": product.price,
+                    "stock": product.stock
+                }
+            })
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+            
+    elif request.method == "DELETE":
+        try:
+            product.delete()
+            return JsonResponse({"success": True})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+            
+    return JsonResponse({"error": "Method not allowed"}, status=405)
+
+
+@csrf_exempt
+def customers_api(request):
+    if request.method != "GET":
+        return JsonResponse({"error": "GET request expected"}, status=405)
+        
+    try:
+        user_spends = list(
+            Transaction.objects.values("user_id")
+            .annotate(ltv=Sum("final_price"), order_count=Count("id"))
+            .order_by("-ltv")
+        )
+        
+        if not user_spends:
+            return JsonResponse({
+                "hasData": False,
+                "totalCustomers": 0,
+                "segmentData": [],
+                "paymentData": [],
+                "topCustomers": []
+            })
+            
+        high_val = 0
+        regular_val = 0
+        occasional_val = 0
+        
+        for u in user_spends:
+            spend = u["ltv"] or 0.0
+            if spend >= 200:
+                high_val += 1
+            elif spend >= 50:
+                regular_val += 1
+            else:
+                occasional_val += 1
+                
+        segment_data = [
+            {"name": "High Value (LTV >= $200)", "value": high_val, "color": "#4f46e5"},
+            {"name": "Regular ($50 - $200)", "value": regular_val, "color": "#eab308"},
+            {"name": "Occasional (< $50)", "value": occasional_val, "color": "#f59e0b"}
+        ]
+        
+        payment_colors = ["#4f46e5", "#f59e0b", "#fbbf24", "#3730a3", "#818cf8"]
+        payment_qs = list(
+            Transaction.objects.values("payment_method")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        payment_data = [
+            {
+                "name": p["payment_method"] or "Unknown",
+                "value": p["count"],
+                "color": payment_colors[idx % len(payment_colors)]
+            }
+            for idx, p in enumerate(payment_qs)
+        ]
+        
+        top_customers = [
+            {
+                "customer": u["user_id"],
+                "ltv": round(float(u["ltv"] or 0.0), 2),
+                "orderCount": u["order_count"]
+            }
+            for u in user_spends[:100]
+        ]
+        
+        return JsonResponse({
+            "hasData": True,
+            "totalCustomers": len(user_spends),
+            "segmentData": segment_data,
+            "paymentData": payment_data,
+            "topCustomers": top_customers
+        })
+    except Exception as e:
+        return JsonResponse({"hasData": False, "error": str(e)}, status=500)
+
+
+@csrf_exempt
+def orders_api(request):
+    if request.method == "GET":
+        try:
+            page = max(1, int(request.GET.get("page", 1)))
+            limit = max(1, min(200, int(request.GET.get("limit", 50))))
+            search = request.GET.get("search", "").strip()
+            
+            qs = Transaction.objects.all().order_by("-purchase_date")
+            if search:
+                qs = qs.filter(
+                    Q(user_id__icontains=search) | 
+                    Q(product_id__icontains=search) | 
+                    Q(category__icontains=search) | 
+                    Q(payment_method__icontains=search)
+                )
+                
+            total = qs.count()
+            skip = (page - 1) * limit
+            txs = list(qs[skip : skip + limit])
+            
+            orders = []
+            for t in txs:
+                pm = (t.payment_method or "").lower()
+                if "credit" in pm or "card" in pm:
+                    region = "AMER (New York)"
+                elif "paypal" in pm or "bank" in pm:
+                    region = "EMEA (London)"
+                else:
+                    region = "APAC (Tokyo)"
+                    
+                orders.append({
+                    "id": str(t.id),
+                    "customer": t.user_id,
+                    "amount": float(t.final_price),
+                    "status": "Shipped",
+                    "region": region,
+                    "localTime": t.purchase_date.strftime("%m/%d/%Y, %I:%M:%S %p"),
+                    "category": t.category,
+                    "paymentMethod": t.payment_method
+                })
+                
+            return JsonResponse({
+                "orders": orders,
+                "pagination": {
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "totalPages": math.ceil(total / limit) if limit else 1
+                }
+            })
+        except Exception as e:
+            return JsonResponse({"error": str(e), "orders": [], "pagination": {"total": 0, "page": 1, "limit": limit, "totalPages": 1}}, status=500)
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            customer = data.get("customer") or data.get("userId") or "guest@store.local"
+            product_id = data.get("productId", "")
+            category = data.get("category", "General")
+            price = float(data.get("price") or data.get("amount") or 0.0)
+            discount = float(data.get("discount", 0.0))
+            final_price = float(data.get("finalPrice") or data.get("amount") or (price - discount))
+            payment_method = data.get("paymentMethod", "Credit Card")
+            
+            tx = Transaction.objects.create(
+                user_id=customer,
+                product_id=str(product_id) if product_id else str(uuid.uuid4()),
+                category=category,
+                price=price,
+                discount=discount,
+                final_price=final_price,
+                payment_method=payment_method,
+                purchase_date=data.get("purchaseDate") or timezone.now()
+            )
+            return JsonResponse({
+                "success": True,
+                "order": {
+                    "id": str(tx.id),
+                    "customer": tx.user_id,
+                    "amount": tx.final_price,
+                    "status": "Shipped",
+                    "region": "AMER (New York)",
+                    "localTime": tx.purchase_date.strftime("%m/%d/%Y, %I:%M:%S %p")
+                }
+            }, status=201)
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+            
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -673,9 +968,7 @@ def run_analytics_agent_api(request):
         if not user_message or not session_id:
             return JsonResponse({"success": False, "error": "Missing message or sessionId"}, status=400)
             
-        logs = []
         tool_calls_executed = []
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Python Analytics Agent activated.")
         
         # Save user message
         AgentMessage.objects.create(
@@ -696,10 +989,9 @@ def run_analytics_agent_api(request):
             elif h.role == "agent":
                 contents.append(types.Content(role="model", parts=[types.Part.from_text(text=h.content)]))
                 
-        # Define local closures to capture logs and tool executions
+        # Define local closures to capture tool executions
         def query_products(category: str = None, search: str = None, minPrice: float = None, maxPrice: float = None, lowStockOnly: bool = False, limit: int = 20) -> str:
             """Search and filter products in the store inventory. Returns details including name, category, price, and stock level."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ query_products: category={category}, search={search}")
             qs = Product.objects.all()
             if category:
                 qs = qs.filter(category__icontains=category)
@@ -722,7 +1014,6 @@ def run_analytics_agent_api(request):
 
         def query_transactions(category: str = None, paymentMethod: str = None, daysBack: int = None, limit: int = 30) -> str:
             """Query raw transaction records from the store. Returns userId, productId, category, price, discount, finalPrice, and paymentMethod."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ query_transactions: category={category}, paymentMethod={paymentMethod}")
             qs = Transaction.objects.all().order_by("-purchase_date")
             if category:
                 qs = qs.filter(category__icontains=category)
@@ -742,7 +1033,6 @@ def run_analytics_agent_api(request):
 
         def get_revenue_metrics(daysBack: int = 30) -> str:
             """Get aggregate revenue metrics including total revenue, daily trends, category breakdown, and growth rates."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ get_revenue_metrics: daysBack={daysBack}")
             cutoff = timezone.now() - timezone.timedelta(days=daysBack)
             txs = Transaction.objects.filter(purchase_date__gte=cutoff).order_by("purchase_date")
             total_revenue = sum(t.final_price for t in txs)
@@ -785,7 +1075,6 @@ def run_analytics_agent_api(request):
 
         def get_inventory_status() -> str:
             """Get a comprehensive inventory status report including stock levels, low-stock counts, and total inventory value."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ get_inventory_status")
             products = list(Product.objects.all().values())
             low_stock_products = [p for p in products if p["stock"] < 10]
             total_value = sum(p["price"] * p["stock"] for p in products)
@@ -812,21 +1101,19 @@ def run_analytics_agent_api(request):
 
         def get_customer_segments(topN: int = 10) -> str:
             """Get customer segmentation data including top customers by spend and LTV-based segments."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ get_customer_segments: topN={topN}")
-            txs = list(Transaction.objects.all().values())
-            customer_spends = {}
-            for t in txs:
-                cust = t["user_id"]
-                customer_spends[cust] = customer_spends.get(cust, 0.0) + t["final_price"]
-            sorted_customers = sorted(customer_spends.items(), key=lambda x: x[1], reverse=True)
-            top_customers = [{"customerId": k, "lifetimeValue": round(v, 2)} for k, v in sorted_customers[:topN]]
+            customer_spends_qs = Transaction.objects.values("user_id").annotate(
+                total_spend=Sum("final_price")
+            ).order_by("-total_spend")
             
-            high_value = sum(1 for c, v in customer_spends.items() if v >= 200)
-            mid_value = sum(1 for c, v in customer_spends.items() if 50 <= v < 200)
-            low_value = sum(1 for c, v in customer_spends.items() if v < 50)
+            all_spends = list(customer_spends_qs)
+            top_customers = [{"customerId": c["user_id"], "lifetimeValue": round(c["total_spend"], 2)} for c in all_spends[:topN]]
+            
+            high_value = sum(1 for c in all_spends if c["total_spend"] >= 200)
+            mid_value = sum(1 for c in all_spends if 50 <= c["total_spend"] < 200)
+            low_value = sum(1 for c in all_spends if c["total_spend"] < 50)
             
             res = json.dumps({
-                "totalCustomers": len(customer_spends),
+                "totalCustomers": len(all_spends),
                 "topSpendCustomers": top_customers,
                 "segments": {"highValue": high_value, "midValue": mid_value, "lowValue": low_value}
             })
@@ -835,23 +1122,20 @@ def run_analytics_agent_api(request):
 
         def calculate_statistics(metric: str) -> str:
             """Compute statistical measures on a metric. Allowed metrics: 'daily_revenue', 'order_values', 'product_prices', 'discount_rates', 'stock_levels'."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ calculate_statistics: metric={metric}")
             numbers = []
             if metric == "daily_revenue":
-                txs = Transaction.objects.all().order_by("purchase_date")
-                daily_rev = {}
-                for t in txs:
-                    d_str = t.purchase_date.strftime("%Y-%m-%d")
-                    daily_rev[d_str] = daily_rev.get(d_str, 0.0) + t.final_price
-                numbers = list(daily_rev.values())
+                trend_qs = Transaction.objects.annotate(
+                    date=TruncDate("purchase_date")
+                ).values("date").annotate(rev=Sum("final_price"))
+                numbers = [t["rev"] for t in trend_qs]
             elif metric == "order_values":
-                numbers = [t.final_price for t in Transaction.objects.all()]
+                numbers = list(Transaction.objects.values_list("final_price", flat=True))
             elif metric == "product_prices":
-                numbers = [p.price for p in Product.objects.all()]
+                numbers = list(Product.objects.values_list("price", flat=True))
             elif metric == "discount_rates":
-                numbers = [t.discount for t in Transaction.objects.all()]
+                numbers = list(Transaction.objects.values_list("discount", flat=True))
             elif metric == "stock_levels":
-                numbers = [p.stock for p in Product.objects.all()]
+                numbers = list(Product.objects.values_list("stock", flat=True))
                 
             if not numbers:
                 return json.dumps({"error": "No data found for metric"})
@@ -876,11 +1160,9 @@ def run_analytics_agent_api(request):
 
         def update_product_price(productId: str, newPrice: float, reason: str) -> str:
             """Propose a price change for a product. This creates a pending price change alert that requires approval."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ update_product_price: product={productId}, newPrice={newPrice}")
-            try:
-                p = Product.objects.get(id=productId)
-            except Product.DoesNotExist:
-                p = Product.objects.get(product_id=productId)
+            p = find_product(productId)
+            if not p:
+                return json.dumps({"error": f"Product not found: {productId}"})
             alert = Alert.objects.create(
                 type="pricing",
                 severity="info",
@@ -895,11 +1177,9 @@ def run_analytics_agent_api(request):
 
         def update_product_stock(productId: str, newStock: int, reason: str) -> str:
             """Propose a stock level adjustment for a product. This creates a pending stock change alert that requires approval."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ update_product_stock: product={productId}, newStock={newStock}")
-            try:
-                p = Product.objects.get(id=productId)
-            except Product.DoesNotExist:
-                p = Product.objects.get(product_id=productId)
+            p = find_product(productId)
+            if not p:
+                return json.dumps({"error": f"Product not found: {productId}"})
             alert = Alert.objects.create(
                 type="low_stock",
                 severity="warning",
@@ -914,7 +1194,6 @@ def run_analytics_agent_api(request):
 
         def create_alert(type: str, severity: str, title: str, description: str) -> str:
             """Create a new alert in the system. Use this to flag anomalies, low stock warnings, or pricing issues."""
-            logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🛠️ create_alert: {title}")
             alert = Alert.objects.create(
                 type=type, severity=severity, title=title, description=description,
                 source="analytics-agent", metadata={"type": "agent_created"}
@@ -933,7 +1212,6 @@ def run_analytics_agent_api(request):
         api_key = os.getenv("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key)
         
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Dispatching request to Gemini API (automatic tool use)...")
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=current_contents,
@@ -944,7 +1222,6 @@ def run_analytics_agent_api(request):
         )
         
         final_text = response.text or "No response text generated."
-        logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] Response received.")
         
         # Save agent response
         AgentMessage.objects.create(
@@ -953,14 +1230,14 @@ def run_analytics_agent_api(request):
             content=final_text,
             agent_type="analytics",
             tool_calls=tool_calls_executed,
-            logs=logs
+            logs=[]
         )
         
         return JsonResponse({
             "success": True,
             "response": final_text,
             "toolCalls": tool_calls_executed,
-            "logs": logs
+            "logs": []
         })
         
     except Exception as e:
@@ -971,16 +1248,11 @@ def run_analytics_agent_api(request):
 
 @csrf_exempt
 def run_pricing_analysis_api(request):
-    logs = []
-    logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 💰 Pricing analysis initiated in Python...")
-    
     try:
         products = list(Product.objects.all())
         if not products:
-            return JsonResponse({"success": False, "recommendations": [], "logs": logs, "error": "No products found."})
+            return JsonResponse({"success": False, "recommendations": [], "logs": [], "error": "No products found."})
             
-        logs.append(f"Loaded {len(products)} products.")
-        
         thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
         
         # Calculate sales velocity for each product
@@ -995,13 +1267,14 @@ def run_pricing_analysis_api(request):
             
         product_analysis = []
         for p in products:
-            sales = sales_map.get(p.product_id, {"units": 0, "rev": 0.0})
+            p_uuid_str = str(p.id)
+            sales = sales_map.get(p_uuid_str, {"units": 0, "rev": 0.0})
             daily_vel = sales["units"] / 30.0
             days_rem = (p.stock / daily_vel) if daily_vel > 0 else 999.0
             
             product_analysis.append({
-                "id": str(p.id),
-                "productId": p.product_id,
+                "id": p_uuid_str,
+                "productId": p_uuid_str,
                 "name": p.name,
                 "category": p.category,
                 "currentPrice": p.price,
@@ -1012,8 +1285,6 @@ def run_pricing_analysis_api(request):
                 "stockDaysRemaining": int(min(days_rem, 999))
             })
             
-        logs.append(f"Sales velocity calculated. Dispatching prompt to Gemini...")
-        
         prompt = f"""You are an AI Dynamic Pricing Engine for an eCommerce store. Analyze the following product data and recommend optimal price adjustments.
  
 PRODUCT ANALYSIS DATA:
@@ -1069,12 +1340,10 @@ Include ALL products, even those where you recommend no change (set changePercen
                 "stockDaysRemaining": analysis["stockDaysRemaining"] if analysis else 999
             })
             
-        logs.append(f"✅ Generated {len(enriched)} pricing recommendations.")
-        return JsonResponse({"success": True, "recommendations": enriched, "logs": logs})
+        return JsonResponse({"success": True, "recommendations": enriched, "logs": []})
         
     except Exception as e:
-        logs.append(f"❌ ERROR: {str(e)}")
-        return JsonResponse({"success": False, "recommendations": [], "logs": logs, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "recommendations": [], "logs": [], "error": str(e)}, status=500)
 
 @csrf_exempt
 def apply_price_change_api(request):
@@ -1087,10 +1356,9 @@ def apply_price_change_api(request):
         new_price = float(data.get("newPrice", 0))
         reason = data.get("reason", "")
         
-        try:
-            product = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            product = Product.objects.get(product_id=product_id)
+        product = find_product(product_id)
+        if not product:
+            return JsonResponse({"success": False, "error": f"Product not found: {product_id}"}, status=404)
             
         old_price = product.price
         
@@ -1135,10 +1403,10 @@ def apply_all_price_changes_api(request):
                 new_price = float(item.get("newPrice", 0))
                 reason = item.get("reason", "")
                 
-                try:
-                    product = Product.objects.get(id=prod_id)
-                except Product.DoesNotExist:
-                    product = Product.objects.get(product_id=prod_id)
+                product = find_product(prod_id)
+                if not product:
+                    failed += 1
+                    continue
                     
                 old_price = product.price
                 
@@ -1186,9 +1454,7 @@ def get_pricing_history_api(request):
 
 @csrf_exempt
 def run_alert_scan_api(request):
-    logs = []
     new_alerts = []
-    logs.append(f"[{timezone.now().strftime('%H:%M:%S')}] 🔍 Alert scan initiated in Python...")
     
     try:
         products = list(Product.objects.all())
@@ -1196,7 +1462,6 @@ def run_alert_scan_api(request):
         
         # 1. Stock Checks
         if low_stock:
-            logs.append(f"Found {len(low_stock)} low-stock items.")
             for p in low_stock:
                 severity = "critical" if p.stock < 3 else "warning"
                 existing = Alert.objects.filter(type="low_stock", acknowledged=False, metadata__productId=str(p.id)).exists()
@@ -1212,7 +1477,6 @@ def run_alert_scan_api(request):
                     new_alerts.append(alert)
                     
         # 2. Revenue Anomalies
-        logs.append(f"Analyzing daily revenues...")
         txs = list(Transaction.objects.all().order_by("purchase_date"))
         daily_rev = {}
         for t in txs:
@@ -1230,7 +1494,6 @@ def run_alert_scan_api(request):
                 change = ((latest["revenue"] - avg_rev) / avg_rev * 100) if avg_rev > 0 else 0.0
                 
                 if change < -25:
-                    logs.append(f"🚨 Revenue drop detected: {change:.1f}%")
                     existing = Alert.objects.filter(type="anomaly", acknowledged=False, metadata__type="revenue_drop").exists()
                     if not existing:
                         alert = Alert.objects.create(
@@ -1243,7 +1506,6 @@ def run_alert_scan_api(request):
                         )
                         new_alerts.append(alert)
                 elif change > 50:
-                    logs.append(f"📈 Revenue spike detected: +{change:.1f}%")
                     existing = Alert.objects.filter(type="anomaly", acknowledged=False, metadata__type="revenue_spike").exists()
                     if not existing:
                         alert = Alert.objects.create(
@@ -1257,11 +1519,10 @@ def run_alert_scan_api(request):
                         new_alerts.append(alert)
 
         # 3. Stale Inventory
-        logs.append(f"Checking for stale inventory...")
         seven_days_ago = timezone.now() - timezone.timedelta(days=7)
         recently_ordered_ids = set(Transaction.objects.filter(purchase_date__gte=seven_days_ago).values_list("product_id", flat=True))
         
-        stale_products = [p for p in products if p.product_id not in recently_ordered_ids and p.stock > 0]
+        stale_products = [p for p in products if str(p.id) not in recently_ordered_ids and p.stock > 0]
         if stale_products and len(stale_products) <= len(products) * 0.5:
             existing = Alert.objects.filter(type="pricing", acknowledged=False, metadata__type="stale_inventory").exists()
             if not existing:
@@ -1278,7 +1539,6 @@ def run_alert_scan_api(request):
 
         # 4. Generate AI summary
         if new_alerts:
-            logs.append(f"Generating AI summary for {len(new_alerts)} new alerts...")
             summary_prompt = f"""You are an AI store monitoring agent. Summarize these {len(new_alerts)} new alerts in 2-3 concise sentences for a dashboard notification. Be specific with numbers.
  
 Alerts:
@@ -1303,14 +1563,12 @@ Respond with ONLY the summary text, no formatting."""
                     metadata={"type": "scan_summary", "alertCount": len(new_alerts)}
                 )
             except Exception as aiError:
-                logs.append(f"AI summary skipped: {str(aiError)}")
+                pass
 
-        logs.append(f"Scan complete. {len(new_alerts)} new alerts created.")
-        return JsonResponse({"success": True, "newAlertCount": len(new_alerts), "logs": logs})
+        return JsonResponse({"success": True, "newAlertCount": len(new_alerts), "logs": []})
         
     except Exception as e:
-        logs.append(f"❌ ERROR: {str(e)}")
-        return JsonResponse({"success": False, "newAlertCount": 0, "logs": logs, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "newAlertCount": 0, "logs": [], "error": str(e)}, status=500)
 
 def alerts_api(request):
     if request.method == "GET":
@@ -1372,18 +1630,22 @@ def acknowledge_all_alerts_api(request):
 # ── 4. Store Manager Agent views ──
 
 def gather_metrics():
-    products = list(Product.objects.all())
-    low_stock = sum(1 for p in products if p.stock < 10)
-    txs = list(Transaction.objects.all())
-    total_rev = sum(t.final_price for t in txs)
-    total_orders = len(txs)
+    products_count = Product.objects.count()
+    low_stock = Product.objects.filter(stock__lt=10).count()
+    agg = Transaction.objects.aggregate(
+        total_rev=Sum("final_price"),
+        total_orders=Count("id"),
+        unique_customers=Count("user_id", distinct=True)
+    )
+    total_rev = round(agg["total_rev"] or 0.0, 2)
+    total_orders = agg["total_orders"] or 0
     
     return {
         "totalRevenue": total_rev,
         "totalOrders": total_orders,
-        "averageOrderValue": (total_rev / total_orders) if total_orders > 0 else 0.0,
-        "uniqueCustomers": len(set(t.user_id for t in txs)),
-        "totalProducts": len(products),
+        "averageOrderValue": round(total_rev / total_orders, 2) if total_orders > 0 else 0.0,
+        "uniqueCustomers": agg["unique_customers"] or 0,
+        "totalProducts": products_count,
         "lowStockAlerts": low_stock
     }
 
@@ -1441,24 +1703,17 @@ def run_manager_cycle_api(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST request expected"}, status=405)
         
-    logs = []
     try:
         data = json.loads(request.body)
         goal_id = data.get("goalId")
         
         goal = GoalPlan.objects.get(id=goal_id)
-        logs.append(f"🧠 Store Manager planning activated for goal: \"{goal.description}\"")
-        
         metrics = gather_metrics()
-        logs.append(f"Metrics gathered - Revenue: ${metrics['totalRevenue']:.2f}, Orders: {metrics['totalOrders']}")
         
         products = list(Product.objects.all())
         low_stock = [p for p in products if p.stock < 10]
         recent_alerts = list(Alert.objects.filter(acknowledged=False).order_by("-created_at")[:5].values())
         recent_price_changes = list(PriceHistory.objects.all().order_by("-created_at")[:5].values())
-        
-        logs.append(f"Context loaded: {len(products)} products, {len(low_stock)} low-stock, {len(recent_alerts)} active alerts.")
-        logs.append(f"Generating action plan via Gemini...")
         
         prompt = f"""You are an AI Store Manager Agent for an eCommerce platform. You must create a strategic action plan to achieve the following business goal:
  
@@ -1557,16 +1812,14 @@ Rules:
         goal.agent_notes = plan.get("agentNotes", "")
         goal.save()
         
-        logs.append(f"Plan generated successfully: {len(new_actions)} proposed actions.")
         return JsonResponse({
             "success": True,
             "analysis": plan.get("analysis", ""),
             "actionsCreated": len(new_actions),
-            "logs": logs
+            "logs": []
         })
     except Exception as e:
-        logs.append(f"❌ ERROR: {str(e)}")
-        return JsonResponse({"success": False, "logs": logs, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "logs": [], "error": str(e)}, status=500)
 
 @csrf_exempt
 def action_decision_api(request):
@@ -1593,7 +1846,6 @@ def execute_actions_api(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST request expected"}, status=405)
         
-    logs = []
     try:
         data = json.loads(request.body)
         goal_id = data.get("goalId")
@@ -1612,10 +1864,9 @@ def execute_actions_api(request):
                         prod_id = params.get("productId")
                         new_price = float(params.get("newPrice", 0))
                         
-                        try:
-                            product = Product.objects.get(id=prod_id)
-                        except Product.DoesNotExist:
-                            product = Product.objects.get(product_id=prod_id)
+                        product = find_product(prod_id)
+                        if not product:
+                            raise Exception(f"Product not found: {prod_id}")
                             
                         old_price = product.price
                         PriceHistory.objects.create(
@@ -1626,7 +1877,6 @@ def execute_actions_api(request):
                         product.price = new_price
                         product.save()
                         action["result"] = {"oldPrice": old_price, "newPrice": new_price, "productName": product.name}
-                        logs.append(f"Price updated: {product.name} ${old_price} -> ${new_price}")
                         
                     elif a_type == "restock":
                         prod_name = params.get("productName")
@@ -1638,7 +1888,6 @@ def execute_actions_api(request):
                             product.stock = new_stock
                             product.save()
                             action["result"] = {"oldStock": old_stock, "newStock": new_stock, "productName": product.name}
-                            logs.append(f"Stock updated: {product.name} {old_stock} -> {new_stock}")
                         else:
                             raise Exception("Product not found by name")
                             
@@ -1648,11 +1897,9 @@ def execute_actions_api(request):
                             description=params.get("details") or action.get("description"), source="store-manager"
                         )
                         action["result"] = {"alertCreated": True}
-                        logs.append(f"Alert created: {action.get('description')}")
                         
                     else:
                         action["result"] = {"noted": True}
-                        logs.append(f"Action noted: {action.get('description')}")
                         
                     action["status"] = "executed"
                     action["executedAt"] = timezone.now().isoformat()
@@ -1661,9 +1908,8 @@ def execute_actions_api(request):
                     action["status"] = "failed"
                     action["result"] = {"error": str(e)}
                     failed += 1
-                    logs.append(f"Failed to execute action: {action.get('description')} - {str(e)}")
                     
         goal.save()
-        return JsonResponse({"success": True, "executed": executed, "failed": failed, "logs": logs})
+        return JsonResponse({"success": True, "executed": executed, "failed": failed, "logs": []})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)

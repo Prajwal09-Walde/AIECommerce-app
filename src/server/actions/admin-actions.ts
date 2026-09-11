@@ -1,39 +1,48 @@
 "use server";
 
 import { requireAuth } from "@/lib/server-auth";
-import { connectToDatabase } from "@/lib/mongoose";
-import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+
 /**
- * Example Server Action: Restock a product.
- * This demonstrates how to use the JWT payload utility to strictly 
- * enforce ADMIN privileges before executing database operations.
+ * Server Action: Restock a product in Django backend.
  */
 export async function restockProductAction(productId: string, quantity: number) {
   try {
-    // 1. Extract and Verify the JWT Payload (Action Purpose)
-    // This will throw an Error if the user is not logged in or is not an ADMIN.
     const payload = await requireAuth("ADMIN");
 
-    // 2. Perform the secure operation
-    await connectToDatabase();
-    
-    const product = await Product.findById(productId);
-    if (!product) {
+    // 1. Fetch current product
+    const getRes = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+
+    if (!getRes.ok) {
       throw new Error("Product not found");
     }
 
-    product.stock += quantity;
-    await product.save();
+    const currentProduct = await getRes.json();
+    const newStock = (currentProduct.stock || 0) + quantity;
 
-    // Revalidate the frontend cache so the updated stock appears immediately
+    // 2. Patch stock
+    const patchRes = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stock: newStock }),
+    });
+
+    if (!patchRes.ok) {
+      throw new Error("Failed to update product stock");
+    }
+
     revalidatePath("/dashboard/products");
 
     return { 
       success: true, 
       message: `Product restocked successfully by Admin: ${payload.name}`,
-      newStockLevel: product.stock
+      newStockLevel: newStock,
     };
     
   } catch (error: any) {

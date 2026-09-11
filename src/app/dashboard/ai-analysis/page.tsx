@@ -161,7 +161,7 @@ export default function AIAnalysisPage() {
         if (result.success && result.analysis) {
           setActiveStep(3);
           // Stream logs from backend action
-          result.logs.forEach((bLog, bIdx) => {
+          (result.logs || []).forEach((bLog: string, bIdx: number) => {
             setTimeout(() => {
               setLogs(prev => [...prev, bLog]);
             }, bIdx * 250);

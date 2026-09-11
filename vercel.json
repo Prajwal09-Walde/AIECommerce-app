@@ -23,6 +23,10 @@
     {
       "source": "/api/reset/:path*",
       "destination": "https://aiecommerce-backend.onrender.com/api/reset/:path*"
+    },
+    {
+      "source": "/api/agent/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/agent/:path*"
     }
   ]
 }

@@ -1,94 +1,36 @@
 "use server";
 
-import { connectToDatabase } from "@/lib/mongoose";
-import Order from "@/models/Order";
-import KaggleTransaction from "@/models/Transaction";
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
 
 export async function getOrders(page: number = 1, limit: number = 50, search: string = "") {
-  await connectToDatabase();
+  try {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      search: search || "",
+    });
+    const res = await fetch(`${BACKEND_URL}/api/orders?${params.toString()}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
 
-  const skip = (page - 1) * limit;
-  const orderCount = await Order.countDocuments({});
-  const hasDistributedData = orderCount > 0;
-
-  let orders: any[] = [];
-  let total = 0;
-
-  if (hasDistributedData) {
-    // 1. Query from live distributed Order collection
-    const query: any = {};
-    if (search) {
-      query.customer = { $regex: search, $options: "i" };
+    if (!res.ok) {
+      throw new Error(`Failed to fetch orders: ${res.statusText}`);
     }
 
-    const [dbOrders, dbCount] = await Promise.all([
-      Order.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Order.countDocuments(query),
-    ]);
-
-    total = dbCount;
-    orders = dbOrders.map((o: any) => {
-      // Map payment methods or default regions
-      return {
-        id: o._id.toString(),
-        customer: o.customer,
-        amount: o.totalAmount,
-        status: o.status,
-        region: "AMER (New York)", // Default region
-        localTime: new Date(o.createdAt).toLocaleString(),
-      };
-    });
-  } else {
-    // 2. Query from raw KaggleTransaction collection
-    const query: any = {};
-    if (search) {
-      query.$or = [
-        { userId: { $regex: search, $options: "i" } },
-        { productId: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const [dbTx, dbCount] = await Promise.all([
-      KaggleTransaction.find(query)
-        .sort({ purchaseDate: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      KaggleTransaction.countDocuments(query),
-    ]);
-
-    total = dbCount;
-    orders = dbTx.map((t: any) => {
-      // Map payment method to realistic market region
-      let region = "APAC (Tokyo)";
-      if (t.paymentMethod.toLowerCase().includes("credit") || t.paymentMethod.toLowerCase().includes("card")) {
-        region = "AMER (New York)";
-      } else if (t.paymentMethod.toLowerCase().includes("paypal") || t.paymentMethod.toLowerCase().includes("bank")) {
-        region = "EMEA (London)";
-      }
-
-      return {
-        id: t._id.toString(),
-        customer: t.userId,
-        amount: t.finalPrice,
-        status: "Shipped",
-        region,
-        localTime: new Date(t.purchaseDate).toLocaleString(),
-      };
-    });
+    return await res.json();
+  } catch (error: any) {
+    console.error("Error fetching orders:", error);
+    return {
+      orders: [],
+      pagination: {
+        total: 0,
+        page,
+        limit,
+        totalPages: 1,
+      },
+      error: error.message,
+    };
   }
-
-  return {
-    orders,
-    pagination: {
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
 }

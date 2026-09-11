@@ -9,6 +9,16 @@ urlpatterns = [
     path('kaggle-transactions/stats', views.kaggle_stats, name='kaggle_stats'),        
     path('kaggle-transactions', views.kaggle_transactions, name='kaggle_transactions'), 
     
+    # Products, Customers & Orders REST endpoints
+    path('products', views.products_api, name='products_api'),
+    path('products/', views.products_api, name='products_api_slash'),
+    path('products/<str:product_id>', views.product_detail_api, name='product_detail_api'),
+    path('products/<str:product_id>/', views.product_detail_api, name='product_detail_api_slash'),
+    path('customers', views.customers_api, name='customers_api'),
+    path('customers/', views.customers_api, name='customers_api_slash'),
+    path('orders', views.orders_api, name='orders_api'),
+    path('orders/', views.orders_api, name='orders_api_slash'),
+    
     # AI Agent API paths
     path('agent/analytics', views.run_analytics_agent_api, name='run_analytics_agent_api'),
     path('agent/analytics/history', views.get_agent_history_api, name='get_agent_history_api'),
