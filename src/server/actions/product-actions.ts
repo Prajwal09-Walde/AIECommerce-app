@@ -1,11 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-const BACKEND_URL = (
-  process.env.BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "https://aiecommerce-backend.onrender.com" : "http://localhost:8000")
-).replace(/['"]/g, "");
+import { getBackendUrl } from "@/lib/api-config";
+
+const BACKEND_URL = getBackendUrl();
 
 export async function getProducts(page: number = 1, limit: number = 24, search: string = "") {
   try {
@@ -77,3 +75,32 @@ export async function deleteProduct(id: string) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Fetch and sync fresh catalog items & transactions directly from live API.
+ */
+export async function syncFromApiAction() {
+  try {
+    const backend = getBackendUrl();
+    const res = await fetch(`${backend}/api/sync-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to sync from API: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/products");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard/customers");
+    return data;
+  } catch (error: any) {
+    console.error("Error syncing catalog from API:", error);
+    return { success: false, error: error.message };
+  }
+}
+

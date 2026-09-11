@@ -185,4 +185,14 @@ class DashboardTests(TestCase):
         self.assertEqual(create_ord_res.status_code, 201)
         self.assertEqual(create_ord_res.json()["order"]["customer"], "new_order@example.com")
 
+    def test_sync_from_api(self):
+        """Test the live API sync endpoint."""
+        res = self.client.post(reverse('sync_from_api'))
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["success"])
+        self.assertGreater(data["products_count"], 0)
+        self.assertGreater(data["transactions_count"], 0)
+
+
 

@@ -8,6 +8,8 @@ urlpatterns = [
     path('analyze/', views.rag_analysis, name='rag_analysis'),
     path('kaggle-transactions/stats', views.kaggle_stats, name='kaggle_stats'),        
     path('kaggle-transactions', views.kaggle_transactions, name='kaggle_transactions'), 
+    path('sync-api', views.sync_from_api, name='sync_from_api'),
+    path('sync-api/', views.sync_from_api, name='sync_from_api_slash'),
     
     # Products, Customers & Orders REST endpoints
     path('products', views.products_api, name='products_api'),

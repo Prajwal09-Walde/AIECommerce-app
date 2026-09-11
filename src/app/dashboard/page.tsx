@@ -147,10 +147,12 @@ export default function DashboardPage() {
     setStreamSpeed, 
     loading, 
     startStreaming, 
-    clearData 
+    clearData,
+    syncFromApi
   } = useKaggleData();
   
   const [activeTab, setActiveTab] = useState("overview");
+  const [isSyncingApi, setIsSyncingApi] = useState(false);
 
   // Filter states
   const [orderSearch, setOrderSearch] = useState("");
@@ -399,6 +401,29 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-4">
           <TimezoneClocks />
           
+          <button
+            type="button"
+            disabled={isSyncingApi}
+            onClick={async () => {
+              setIsSyncingApi(true);
+              try {
+                await syncFromApi();
+              } catch (e) {
+                console.error(e);
+              } finally {
+                setIsSyncingApi(false);
+              }
+            }}
+            className="flex items-center justify-center gap-2 border bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
+          >
+            {isSyncingApi ? (
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            )}
+            <span>{isSyncingApi ? "Fetching API..." : "Sync Live API"}</span>
+          </button>
+
           <button
             onClick={async () => {
               await clearData();

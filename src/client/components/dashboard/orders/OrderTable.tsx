@@ -4,8 +4,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { ColDef } from "ag-grid-community";
 import { getOrders } from "@/actions/order-actions";
+import { syncFromApiAction } from "@/actions/product-actions";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, RefreshCw, ShoppingBag } from "lucide-react";
+import { Loader2, Search, RefreshCw, ShoppingBag, CloudDownload } from "lucide-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
@@ -89,6 +90,20 @@ export const OrderTable = () => {
     };
   }, []);
 
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncFromApiAction();
+      await loadData(debouncedSearch);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Search & Utility Bar */}
@@ -103,14 +118,25 @@ export const OrderTable = () => {
             className="pl-9 h-9 w-full rounded-lg border border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
           />
         </div>
-        <button
-          onClick={() => loadData(debouncedSearch)}
-          disabled={loading}
-          className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={loading || syncing}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
+            title="Fetch real orders and catalog from live Fake Store API"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Sync from API
+          </button>
+          <button
+            onClick={() => loadData(debouncedSearch)}
+            disabled={loading || syncing}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -126,9 +152,17 @@ export const OrderTable = () => {
           <div className="space-y-1">
             <h3 className="font-bold text-lg">No orders found</h3>
             <p className="text-muted-foreground text-sm max-w-sm">
-              Ingest and distribute the Kaggle E-Commerce transaction dataset on the Dataset page to populate this ledger!
+              Fetch real transactions directly from the live API, or import the Kaggle dataset!
             </p>
           </div>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="mt-2 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-md disabled:opacity-50"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Fetch Live Orders from API
+          </button>
         </div>
       ) : (
         <div className="ag-theme-alpine w-full h-[580px] shadow-lg border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">

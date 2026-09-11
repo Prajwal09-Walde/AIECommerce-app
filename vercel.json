@@ -39,6 +39,10 @@
     {
       "source": "/api/customers/:path*",
       "destination": "https://aiecommerce-backend.onrender.com/api/customers/:path*"
+    },
+    {
+      "source": "/api/sync-api/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/sync-api/:path*"
     }
   ]
 }

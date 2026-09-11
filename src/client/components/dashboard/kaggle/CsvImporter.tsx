@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { UploadCloud, CheckCircle, AlertCircle, Loader2, Trash2, Database } from "lucide-react";
+import { UploadCloud, CheckCircle, AlertCircle, Loader2, Trash2, Database, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { syncFromApiAction } from "@/actions/product-actions";
 
 interface KaggleCsvImporterProps {
   onSuccess: () => void;
@@ -17,7 +18,31 @@ export const KaggleCsvImporter: React.FC<KaggleCsvImporterProps> = ({ onSuccess 
   const [progress, setProgress] = useState(0);
   const [clearExisting, setClearExisting] = useState(true);
   const [distribute, setDistribute] = useState(false);
+  const [isSyncingApi, setIsSyncingApi] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSyncFromApi = async () => {
+    setIsSyncingApi(true);
+    try {
+      const res = await syncFromApiAction();
+      if (res && res.error) {
+        throw new Error(res.error);
+      }
+      toast({
+        title: "Live API Synchronized! 🚀",
+        description: `Successfully loaded ${res.products_count || 0} products & ${res.transactions_count || 0} transactions from FakeStore API.`,
+      });
+      onSuccess();
+    } catch (err: any) {
+      toast({
+        title: "Sync Failed",
+        description: err.message || "Failed to fetch from live API",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingApi(false);
+    }
+  };
 
   // Safe CSV parser that handles quotes and commas inside fields
   const parseCSVLine = (line: string): string[] => {
@@ -214,9 +239,39 @@ export const KaggleCsvImporter: React.FC<KaggleCsvImporterProps> = ({ onSuccess 
         <div>
           <h3 className="font-semibold text-lg">Kaggle E-Commerce Data Importer</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Upload the `e-commerce-dataset.csv` file from Steve1215rogg
+            Upload the `e-commerce-dataset.csv` file from Steve1215rogg or sync directly from live API
           </p>
         </div>
+      </div>
+
+      {/* Live API shortcut block */}
+      <div className="mb-4 p-3 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center space-x-2.5">
+          <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-600 dark:text-emerald-400">
+            <RefreshCw className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              Fetch from Live External API (No CSV needed)
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Quickly sync realistic products & transactions from FakeStore API.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={isSyncingApi || isUploading}
+          onClick={handleSyncFromApi}
+          className="whitespace-nowrap px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center space-x-1.5"
+        >
+          {isSyncingApi ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5" />
+          )}
+          <span>{isSyncingApi ? "Syncing..." : "Sync from Live API"}</span>
+        </button>
       </div>
 
       {!file ? (

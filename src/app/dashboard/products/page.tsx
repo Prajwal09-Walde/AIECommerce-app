@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Search, Tag, DollarSign, Layers, Loader2, Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, Search, Tag, DollarSign, Layers, Loader2, Plus, Trash2, ChevronLeft, ChevronRight, CloudDownload } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getProducts, addProduct, deleteProduct } from "@/actions/product-actions";
+import { getProducts, addProduct, deleteProduct, syncFromApiAction } from "@/actions/product-actions";
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
@@ -86,6 +86,13 @@ export default function ProductsPage() {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: syncFromApiAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
   const handleQuickAdd = () => {
     addMutation.mutate({
       name: "Smart Watch Series " + Math.floor(Math.random() * 10),
@@ -104,7 +111,7 @@ export default function ProductsPage() {
             Inventory tracking powered by TanStack Query, showing {totalProducts} dynamic catalog items.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <input
@@ -112,13 +119,22 @@ export default function ProductsPage() {
               placeholder="Search products..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 w-full md:w-[200px] lg:w-[300px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:ring-2 focus:ring-amber-500 outline-none"
+              className="pl-8 h-9 w-full md:w-[180px] lg:w-[240px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:ring-2 focus:ring-amber-500 outline-none"
             />
           </div>
           <button 
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl transition-colors text-sm font-semibold shadow-md disabled:opacity-50"
+            title="Fetch real products directly from live Fake Store API"
+          >
+            {syncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Sync from API
+          </button>
+          <button 
             onClick={handleQuickAdd}
             disabled={addMutation.isPending}
-            className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-black px-4 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg"
+            className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-black px-3.5 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg"
           >
             {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Quick Add
@@ -135,8 +151,16 @@ export default function ProductsPage() {
         <div className="space-y-8">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {productsList.length === 0 ? (
-              <div className="col-span-full py-20 text-center text-muted-foreground border rounded-xl border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10">
-                No matching product SKUs found in the collection.
+              <div className="col-span-full py-20 text-center text-muted-foreground border rounded-xl border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10 flex flex-col items-center gap-3">
+                <p>No matching product SKUs found in the collection.</p>
+                <button
+                  onClick={() => syncMutation.mutate()}
+                  disabled={syncMutation.isPending}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 shadow-md"
+                >
+                  {syncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+                  Fetch Catalog from Live Fake Store API
+                </button>
               </div>
             ) : (
               productsList.map((product: any) => (

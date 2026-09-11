@@ -24,6 +24,7 @@ import { KaggleCsvImporter } from "./CsvImporter";
 import { AgGridReact } from "ag-grid-react";
 import { ColDef } from "ag-grid-community";
 import { getBackendUrl } from "@/lib/api-config";
+import { syncFromApiAction } from "@/actions/product-actions";
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -64,6 +65,33 @@ export const KaggleAnalyticsDashboard = () => {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [showImporter, setShowImporter] = useState(false);
+  const [isSyncingApi, setIsSyncingApi] = useState(false);
+
+  const handleSyncFromApi = async () => {
+    setIsSyncingApi(true);
+    try {
+      const res = await syncFromApiAction();
+      if (res && res.error) {
+        throw new Error(res.error);
+      }
+      toast({
+        title: "Live API Synchronized! 🚀",
+        description: `Retrieved ${res.products_count || 0} products and ${res.transactions_count || 0} transactions from FakeStore API.`,
+      });
+      setShowImporter(false);
+      await fetchStats();
+      await fetchTransactions();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Sync Error",
+        description: err.message || "Failed to fetch from live API",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingApi(false);
+    }
+  };
   
   // Table state
   const [rowData, setRowData] = useState<any[]>([]);
@@ -233,6 +261,19 @@ export const KaggleAnalyticsDashboard = () => {
         <div className="flex items-center space-x-3">
           <button
             type="button"
+            disabled={isSyncingApi}
+            onClick={handleSyncFromApi}
+            className="flex items-center space-x-2 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-3 py-1.5 rounded-lg text-sm transition-colors font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 disabled:opacity-50"
+          >
+            {isSyncingApi ? (
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span>{isSyncingApi ? "Fetching Live Data..." : "Fetch from Live API"}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => {
               fetchStats();
               fetchTransactions();
@@ -270,15 +311,31 @@ export const KaggleAnalyticsDashboard = () => {
           <Database className="w-16 h-16 text-indigo-500 mb-4 animate-pulse" />
           <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">No Transaction Data Loaded</h3>
           <p className="text-slate-500 dark:text-slate-400 max-w-md mt-2 mb-6">
-            To view interactive charts, KPIs, and explore products, please drag and drop the `e-commerce-dataset.csv` file using the upload panel above.
+            You don&apos;t have to solely depend on manual CSV ingestion. Fetch live catalog and order data directly from the integrated external e-commerce API, or upload a custom CSV dataset.
           </p>
-          <button
-            type="button"
-            onClick={() => setShowImporter(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm"
-          >
-            Open Importer
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              disabled={isSyncingApi}
+              onClick={handleSyncFromApi}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center space-x-2"
+            >
+              {isSyncingApi ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span>{isSyncingApi ? "Fetching Live API..." : "Fetch from Live API"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImporter(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center space-x-2"
+            >
+              <Download className="w-4 h-4" />
+              <span>Upload CSV Dataset</span>
+            </button>
+          </div>
         </div>
       ) : (
         <>

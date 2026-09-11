@@ -10,24 +10,45 @@ export function useKaggleData() {
   const [loading, setLoading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  const loadInitial = async () => {
+    try {
+      const backend = getBackendUrl();
+      const res = await fetch(`${backend}/api/kaggle-transactions?limit=150`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.transactions && data.transactions.length > 0) {
+          setTransactions(data.transactions);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load initial transactions:", e);
+    }
+  };
+
   // Load initial batch on mount so dashboard is never blank
   useEffect(() => {
-    async function loadInitial() {
-      try {
-        const backend = getBackendUrl();
-        const res = await fetch(`${backend}/api/kaggle-transactions?limit=150`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.transactions && data.transactions.length > 0) {
-            setTransactions(data.transactions);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load initial transactions:", e);
-      }
-    }
     loadInitial();
   }, []);
+
+  const syncFromApi = async () => {
+    setLoading(true);
+    try {
+      const backend = getBackendUrl();
+      const res = await fetch(`${backend}/api/sync-api`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        await loadInitial();
+      }
+      return await res.json();
+    } catch (e) {
+      console.error("Failed to sync from API:", e);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Stop stream on unmount
   useEffect(() => {
@@ -116,6 +137,8 @@ export function useKaggleData() {
     loading,
     startStreaming,
     clearData,
+    syncFromApi,
+    refreshData: loadInitial,
   };
 }
 

@@ -145,9 +145,13 @@ def reset_data(request):
     Product.objects.all().delete()
     return JsonResponse({"message": "SQLite database has been wiped clean."})
 
-def seed_synthetic_data():
-    if Transaction.objects.count() > 0:
-        return
+def seed_synthetic_data(force=False):
+    if not force and Transaction.objects.exists():
+        return {"products": Product.objects.count(), "transactions": Transaction.objects.count()}
+        
+    if force:
+        Transaction.objects.all().delete()
+        Product.objects.all().delete()
         
     categories = ["Electronics", "Clothing", "Home", "Books"]
     payment_methods = ["Credit Card", "PayPal", "Bank Transfer", "Crypto"]
@@ -300,6 +304,27 @@ def seed_synthetic_data():
             ))
             
         Transaction.objects.bulk_create(new_tx)
+        
+    return {
+        "products": Product.objects.count(),
+        "transactions": Transaction.objects.count()
+    }
+
+@csrf_exempt
+def sync_from_api(request):
+    """Fetches real e-commerce catalog from Fake Store API and creates synced products and transactions."""
+    if request.method not in ["GET", "POST"]:
+        return JsonResponse({"error": "GET or POST expected"}, status=405)
+    try:
+        counts = seed_synthetic_data(force=True)
+        return JsonResponse({
+            "success": True,
+            "message": f"Successfully fetched and synced {counts.get('products', 0)} products and {counts.get('transactions', 0)} transactions from Fake Store API.",
+            "products_count": counts.get("products", 0),
+            "transactions_count": counts.get("transactions", 0),
+        })
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 def stream_transactions(request):
     seed_synthetic_data()
@@ -504,6 +529,8 @@ def kaggle_stats(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET request expected"}, status=405)
 
+    seed_synthetic_data()
+
     if not Transaction.objects.exists():
         return JsonResponse({"hasData": False})
 
@@ -557,6 +584,8 @@ def kaggle_transactions(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET request expected"}, status=405)
 
+    seed_synthetic_data()
+
     page = int(request.GET.get("page", 1))
     limit = int(request.GET.get("limit", 50))
     search = request.GET.get("search", "").strip()
@@ -607,6 +636,7 @@ def kaggle_transactions(request):
 
 @csrf_exempt
 def products_api(request):
+    seed_synthetic_data()
     if request.method == "GET":
         try:
             page = max(1, int(request.GET.get("page", 1)))
@@ -731,6 +761,7 @@ def customers_api(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET request expected"}, status=405)
         
+    seed_synthetic_data()
     try:
         user_spends = list(
             Transaction.objects.values("user_id")
@@ -803,6 +834,7 @@ def customers_api(request):
 
 @csrf_exempt
 def orders_api(request):
+    seed_synthetic_data()
     if request.method == "GET":
         try:
             page = max(1, int(request.GET.get("page", 1)))
