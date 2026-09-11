@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrders } from "@/actions/order-actions";
-
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+const BACKEND_URL = (
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "https://aiecommerce-backend.onrender.com" : "http://localhost:8000")
+).replace(/['"]/g, "");
 
 export async function GET(request: NextRequest) {
   try {

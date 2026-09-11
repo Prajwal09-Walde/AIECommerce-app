@@ -37,9 +37,10 @@ export const OrderTable = () => {
     setLoading(true);
     try {
       const res = await getOrders(1, 200, searchVal); // Limit to 200 most recent for super snappy grid rendering
-      setRowData(res.orders);
+      setRowData(res?.orders || []);
     } catch (err) {
       console.error("Failed to load live orders:", err);
+      setRowData([]);
     } finally {
       setLoading(false);
     }

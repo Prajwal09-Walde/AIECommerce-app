@@ -2,8 +2,11 @@
 
 import { requireAuth } from "@/lib/server-auth";
 import { revalidatePath } from "next/cache";
-
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+const BACKEND_URL = (
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "https://aiecommerce-backend.onrender.com" : "http://localhost:8000")
+).replace(/['"]/g, "");
 
 /**
  * Server Action: Restock a product in Django backend.

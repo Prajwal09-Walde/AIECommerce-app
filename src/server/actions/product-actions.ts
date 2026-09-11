@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+const BACKEND_URL = (
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "https://aiecommerce-backend.onrender.com" : "http://localhost:8000")
+).replace(/['"]/g, "");
 
 export async function getProducts(page: number = 1, limit: number = 24, search: string = "") {
   try {

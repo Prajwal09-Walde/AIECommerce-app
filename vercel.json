@@ -27,6 +27,18 @@
     {
       "source": "/api/agent/:path*",
       "destination": "https://aiecommerce-backend.onrender.com/api/agent/:path*"
+    },
+    {
+      "source": "/api/orders/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/orders/:path*"
+    },
+    {
+      "source": "/api/products/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/products/:path*"
+    },
+    {
+      "source": "/api/customers/:path*",
+      "destination": "https://aiecommerce-backend.onrender.com/api/customers/:path*"
     }
   ]
 }
