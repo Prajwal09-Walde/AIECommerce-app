@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { getBackendUrl } from "@/lib/api-config";
 
 export function useKaggleData() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -10,6 +9,25 @@ export function useKaggleData() {
   const [streamSpeed, setStreamSpeed] = useState(0.2); // seconds per transaction
   const [loading, setLoading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Load initial batch on mount so dashboard is never blank
+  useEffect(() => {
+    async function loadInitial() {
+      try {
+        const backend = getBackendUrl();
+        const res = await fetch(`${backend}/api/kaggle-transactions?limit=150`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.transactions && data.transactions.length > 0) {
+            setTransactions(data.transactions);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load initial transactions:", e);
+      }
+    }
+    loadInitial();
+  }, []);
 
   // Stop stream on unmount
   useEffect(() => {
@@ -28,7 +46,8 @@ export function useKaggleData() {
     }
     
     try {
-      await fetch(`${API_URL}/api/reset/`, {
+      const backend = getBackendUrl();
+      await fetch(`${backend}/api/reset/`, {
         method: "POST"
       });
     } catch (e) {
@@ -48,10 +67,10 @@ export function useKaggleData() {
         eventSourceRef.current.close();
       }
 
-      setTransactions([]);
       setIsStreaming(true);
 
-      const streamUrl = `${API_URL}/api/stream/?speed=${speedVal}`;
+      const backend = getBackendUrl();
+      const streamUrl = `${backend}/api/stream/?speed=${speedVal}`;
       const es = new EventSource(streamUrl);
       eventSourceRef.current = es;
 

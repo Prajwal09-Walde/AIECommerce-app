@@ -65,8 +65,7 @@ import { AgGridReact } from "ag-grid-react";
 import { ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { getBackendUrl } from "@/lib/api-config";
 
 const PRESETS = [
   {
@@ -320,7 +319,7 @@ export default function DashboardPage() {
         const timeout = setTimeout(() => controller.abort(), 30000);
         
         try {
-          const res = await fetch(`${API_URL}/api/analyze/`, {
+          const res = await fetch(`${getBackendUrl()}/api/analyze/`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({ focus: ragFocus, guidelines: ragGuidelines }),

@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { KaggleCsvImporter } from "./CsvImporter";
 import { AgGridReact } from "ag-grid-react";
 import { ColDef } from "ag-grid-community";
+import { getBackendUrl } from "@/lib/api-config";
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -92,8 +93,8 @@ export const KaggleAnalyticsDashboard = () => {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${API_URL}/api/kaggle-transactions/stats`);
+      const backend = getBackendUrl();
+      const response = await fetch(`${backend}/api/kaggle-transactions/stats`);
       if (!response.ok) throw new Error("Failed to load statistics");
       const data = await response.json();
       setStats(data);
@@ -133,8 +134,8 @@ export const KaggleAnalyticsDashboard = () => {
         paymentMethod,
       });
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${API_URL}/api/kaggle-transactions?${params.toString()}`);
+      const backend = getBackendUrl();
+      const res = await fetch(`${backend}/api/kaggle-transactions?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch transaction records");
       const data = await res.json();
       

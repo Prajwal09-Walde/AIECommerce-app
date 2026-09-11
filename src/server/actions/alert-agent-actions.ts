@@ -1,6 +1,8 @@
 "use server";
 
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+import { getBackendUrl } from "@/lib/api-config";
+
+const BACKEND_URL = getBackendUrl();
 
 /**
  * Runs a full AI-powered store health scan delegating to Django Python agent.

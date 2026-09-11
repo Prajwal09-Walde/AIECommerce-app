@@ -4,13 +4,15 @@ import { connectToDatabase } from "@/lib/mongoose";
 import Order from "@/models/Order";
 import KaggleTransaction from "@/models/Transaction";
 
+import { getBackendUrl } from "@/lib/api-config";
+
 export async function getForecastingData() {
   await connectToDatabase();
 
   const orderCount = await Order.countDocuments({});
   const hasDistributedData = orderCount > 0;
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const BACKEND_URL = getBackendUrl();
   let rawTimeline: Array<{ date: string; revenue: number }> = [];
 
   if (hasDistributedData) {

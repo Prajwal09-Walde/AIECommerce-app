@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteProduct } from "@/actions/product-actions";
+import { getBackendUrl } from "@/lib/api-config";
 
-const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/['"]/g, "");
+const BACKEND_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
